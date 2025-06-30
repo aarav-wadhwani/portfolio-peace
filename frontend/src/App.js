@@ -1,6 +1,7 @@
 import './App.css';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Plus, X } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function App() {
   const [holdings, setHoldings] = useState([]);
@@ -10,6 +11,43 @@ function App() {
     shares: '',
     purchasePrice: ''
   });
+  const [chartData, setChartData] = useState([]);
+
+  // Generate mock historical data when holdings change
+  useEffect(() => {
+    if (holdings.length > 0) {
+      const data = [];
+      const days = 30;
+      const totalInvested = holdings.reduce((sum, h) => sum + (h.purchasePrice * h.shares), 0);
+      
+      for (let i = 0; i < days; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() - (days - i));
+        
+        // Simulate price movement
+        const randomMultiplier = 0.9 + (Math.random() * 0.3); // 0.9 to 1.2
+        const value = totalInvested * randomMultiplier;
+        
+        data.push({
+          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          value: value.toFixed(2),
+          profit: (value - totalInvested).toFixed(2)
+        });
+      }
+      
+      // Add current value as last point
+      const currentValue = holdings.reduce((sum, h) => sum + (h.currentPrice * h.shares), 0);
+      data.push({
+        date: 'Today',
+        value: currentValue.toFixed(2),
+        profit: (currentValue - totalInvested).toFixed(2)
+      });
+      
+      setChartData(data);
+    } else {
+      setChartData([]);
+    }
+  }, [holdings]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -19,7 +57,7 @@ function App() {
       ticker: formData.ticker.toUpperCase(),
       shares: parseFloat(formData.shares),
       purchasePrice: parseFloat(formData.purchasePrice),
-      currentPrice: parseFloat(formData.purchasePrice) * 1.1, // Mock 10% gain
+      currentPrice: parseFloat(formData.purchasePrice) * (0.9 + Math.random() * 0.3), // Random price
     };
     
     setHoldings([...holdings, newHolding]);
@@ -50,10 +88,47 @@ function App() {
           {totalInvested > 0 && (
             <div className={`profit ${totalProfit >= 0 ? 'positive' : 'negative'}`}>
               {totalProfit >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
-              ${Math.abs(totalProfit).toFixed(2)} ({profitPercent.toFixed(1)}%)
+              ${Math.abs(totalProfit).toFixed(2)} ({profitPercent > 0 ? '+' : ''}{profitPercent.toFixed(1)}%)
             </div>
           )}
         </div>
+
+        {chartData.length > 0 && (
+          <div className="chart-container">
+            <h3>Portfolio Performance (Last 30 Days)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#666"
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis 
+                  stroke="#666"
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `$${value}`}
+                />
+                <Tooltip 
+                  formatter={(value) => `$${value}`}
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#4F46E5" 
+                  strokeWidth={2}
+                  dot={{ fill: '#4F46E5', r: 3 }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {!showForm && (
           <button className="add-button" onClick={() => setShowForm(true)}>

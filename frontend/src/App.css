@@ -215,3 +215,19 @@ main {
     font-size: 2.5rem;
   }
 }
+
+/* Add this to your existing App.css */
+
+.chart-container {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.chart-container h3 {
+  margin: 0 0 1rem 0;
+  color: #1a1a1a;
+  font-size: 1.25rem;
+}
