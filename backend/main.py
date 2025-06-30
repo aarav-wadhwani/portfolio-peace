@@ -17,7 +17,7 @@ load_dotenv()
 
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://cleartrack.vercel.app",  # ← your Vercel front-end
+    "https://portfolio-peace.vercel.app/",  # ← your Vercel front-end
 ]
 
 CACHE_TTL = int(os.getenv("CACHE_TTL", 300))  # seconds (default 5 min)
