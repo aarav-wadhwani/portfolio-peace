@@ -65,35 +65,39 @@ def _get_cached(ticker: str):
 
 
 def fetch_price(ticker: str) -> float | None:
-    """
-    Return the latest close (or last traded) price for an NSE symbol.
-
-    Raises nothing—just returns None if data cannot be obtained.
-    """
+    import sys
     ticker = ticker.strip().upper()
-    cached = _get_cached(ticker)
-    if cached is not None:
-        return cached
-
     yf_symbol = f"{ticker}.NS"
+    print(f"Fetching: {yf_symbol}", file=sys.stderr)
+
     try:
-        # 1) history() is the most reliable for equities
-        hist = yf.Ticker(yf_symbol).history(period="2d", threads=False, progress=False)
+        stock = yf.Ticker(yf_symbol)
+        hist = stock.history(period="2d", threads=False, progress=False)
+
         if not hist.empty:
             price = float(hist["Close"].iloc[-1])
+            print(f"✔️ Got price for {yf_symbol}: {price}", file=sys.stderr)
+            price_cache[ticker] = {"price": price, "timestamp": time.time()}
+            return price
         else:
-            # 2) fallback inside yfinance (fast_info)
-            info = yf.Ticker(yf_symbol).fast_info
-            price = info.get("last_price") or info.get("previous_close")
-            if price is None:
-                return None
-    except Exception as exc:
-        print(f"[yfinance] error fetching {yf_symbol}: {exc}")
-        return None
+            print(f"⚠️ Empty history for {yf_symbol}: {hist}", file=sys.stderr)
 
-    # cache & return
-    price_cache[ticker] = {"price": price, "timestamp": time.time()}
-    return price
+        # Try fallback to fast_info
+        try:
+            info = stock.fast_info
+            price = info.get("last_price") or info.get("previous_close")
+            if price:
+                print(f"✔️ Fallback fast_info price for {yf_symbol}: {price}", file=sys.stderr)
+                price_cache[ticker] = {"price": price, "timestamp": time.time()}
+                return price
+        except Exception as fallback_e:
+            print(f"❌ fast_info failed: {fallback_e}", file=sys.stderr)
+
+    except Exception as e:
+        print(f"❌ yfinance fetch failed for {yf_symbol}: {e}", file=sys.stderr)
+
+    return None
+
 
 
 # ────────────────────────────────────────────────────────────────────────────────
