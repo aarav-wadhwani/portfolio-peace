@@ -62,7 +62,7 @@ def fetch_price_yf(ticker: str) -> float | None:
 
     # 1) history (most reliable)
     try:
-        hist = stock.history(period="2d", threads=False, progress=False)
+        hist = stock.history(period="2d", progress=False)
         if not hist.empty:
             price = float(hist["Close"].iloc[-1])
             set_cache(ticker, price)
