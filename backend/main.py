@@ -74,41 +74,48 @@ def _set_cache(ticker: str, price: float):
 # ────────────────────────────────────────────────────────────────────
 #  Low-level NSE fetch
 # ────────────────────────────────────────────────────────────────────
+import requests
+
+session = requests.Session()
+session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.nseindia.com/"
+})
+
 def fetch_price_nse(ticker: str) -> float | None:
-    """
-    Query https://www.nseindia.com/api/quote-equity?symbol=...
-    Return last traded price as float, or None on failure.
-    """
+    import time
     ticker = ticker.strip().upper()
 
-    # 0. serve from cache if fresh
-    cached = _get_cached_price(ticker)
-    if cached is not None:
-        return cached
-
-    # 1. We must first hit the root page once to obtain cookies
     try:
-        session.get("https://www.nseindia.com", timeout=5)
+        # Hit the homepage to set cookies
+        homepage = "https://www.nseindia.com"
+        session.get(homepage, timeout=5)
     except Exception as e:
         print(f"[NSE] cookie pre-fetch failed: {e}")
 
     url = f"https://www.nseindia.com/api/quote-equity?symbol={ticker}"
     try:
-        r = session.get(url, timeout=10)
-        r.raise_for_status()
-        data = r.json()
-        price_raw = data.get("priceInfo", {}).get("lastPrice")
-        if price_raw:
-            # Convert '2,845.65' ➜ 2845.65
-            price = float(str(price_raw).replace(",", ""))
-            _set_cache(ticker, price)
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        price_str = data.get("priceInfo", {}).get("lastPrice")
+        if price_str:
+            price = float(str(price_str).replace(",", ""))
+            price_cache[ticker] = {"price": price, "timestamp": time.time()}
             return price
         else:
-            print(f"[NSE] lastPrice missing for {ticker}")
+            print(f"[NSE] lastPrice missing in response for {ticker}")
             return None
     except Exception as e:
         print(f"[NSE] fetch error for {ticker}: {e}")
         return None
+
 
 # ────────────────────────────────────────────────────────────────────
 #  FastAPI setup
