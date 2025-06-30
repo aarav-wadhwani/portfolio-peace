@@ -1,32 +1,28 @@
-# main.py
-# -------------------------------------------------------------------
-# ClearTrack – FastAPI backend for Indian stocks (NSE live prices)
-# -------------------------------------------------------------------
+# main.py ─────────────────────────────────────────────────────────────
 import os
 import time
 from datetime import datetime
 from typing import Dict, List
 
-import requests
+import yfinance as yf
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
 # ────────────────────────────────────────────────────────────────────
-#  Environment / config
+# Config / env
 # ────────────────────────────────────────────────────────────────────
 load_dotenv()
 
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",                # local dev
-    "https://cleartrack.vercel.app",        # prod front-end on Vercel
+    "http://localhost:3000",
+    "https://cleartrack.vercel.app",  # ← your Vercel front-end
 ]
 
-CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL", 300))  # default: 5 min
+CACHE_TTL = int(os.getenv("CACHE_TTL", 300))  # seconds (default 5 min)
 
-# Popular tickers you may want to show on the front-end “quick list”
-POPULAR_TICKERS = {
+POPULAR = {
     "RELIANCE": "Reliance Industries",
     "TCS": "Tata Consultancy Services",
     "INFY": "Infosys",
@@ -40,87 +36,57 @@ POPULAR_TICKERS = {
 }
 
 # ────────────────────────────────────────────────────────────────────
-#  Requests session pre-configured for NSE endpoints
+# Simple in-memory cache  {TICKER: {"price": float, "ts": float}}
 # ────────────────────────────────────────────────────────────────────
-session = requests.Session()
-session.headers.update(
-    {
-        # NSE blocks generic user-agents; mimic a normal browser
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0 Safari/537.36"
-        ),
-        "Accept": "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.nseindia.com/",
-    }
-)
+cache: Dict[str, Dict[str, float]] = {}
 
-# ────────────────────────────────────────────────────────────────────
-#  Simple cache  { "TICKER": { "price": float, "timestamp": float } }
-# ────────────────────────────────────────────────────────────────────
-price_cache: Dict[str, Dict[str, float]] = {}
-
-def _get_cached_price(ticker: str):
-    entry = price_cache.get(ticker)
-    if entry and (time.time() - entry["timestamp"] < CACHE_TTL_SECONDS):
+def get_cached(ticker: str):
+    entry = cache.get(ticker)
+    if entry and (time.time() - entry["ts"] < CACHE_TTL):
         return entry["price"]
     return None
 
-def _set_cache(ticker: str, price: float):
-    price_cache[ticker] = {"price": price, "timestamp": time.time()}
+def set_cache(ticker: str, price: float):
+    cache[ticker] = {"price": price, "ts": time.time()}
 
 # ────────────────────────────────────────────────────────────────────
-#  Low-level NSE fetch
+# yfinance fetch (history ➜ fast_info)
 # ────────────────────────────────────────────────────────────────────
-import requests
-
-session = requests.Session()
-session.headers.update({
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/125.0 Safari/537.36"
-    ),
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nseindia.com/"
-})
-
-def fetch_price_nse(ticker: str) -> float | None:
-    import time
+def fetch_price_yf(ticker: str) -> float | None:
     ticker = ticker.strip().upper()
+    if cached := get_cached(ticker):
+        return cached
 
-    try:
-        # Hit the homepage to set cookies
-        homepage = "https://www.nseindia.com"
-        session.get(homepage, timeout=5)
-    except Exception as e:
-        print(f"[NSE] cookie pre-fetch failed: {e}")
+    yf_symbol = f"{ticker}.NS"
+    stock = yf.Ticker(yf_symbol)
 
-    url = f"https://www.nseindia.com/api/quote-equity?symbol={ticker}"
+    # 1) history (most reliable)
     try:
-        response = session.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        price_str = data.get("priceInfo", {}).get("lastPrice")
-        if price_str:
-            price = float(str(price_str).replace(",", ""))
-            price_cache[ticker] = {"price": price, "timestamp": time.time()}
+        hist = stock.history(period="2d", threads=False, progress=False)
+        if not hist.empty:
+            price = float(hist["Close"].iloc[-1])
+            set_cache(ticker, price)
             return price
-        else:
-            print(f"[NSE] lastPrice missing in response for {ticker}")
-            return None
     except Exception as e:
-        print(f"[NSE] fetch error for {ticker}: {e}")
-        return None
+        print(f"[YF] history() failed for {ticker}: {e}")
 
+    # 2) fast_info fallback
+    try:
+        info = stock.fast_info
+        price = info.get("last_price") or info.get("previous_close")
+        if price:
+            set_cache(ticker, float(price))
+            return float(price)
+    except Exception as e:
+        print(f"[YF] fast_info failed for {ticker}: {e}")
+
+    print(f"[YF] No price for {ticker}")
+    return None
 
 # ────────────────────────────────────────────────────────────────────
-#  FastAPI setup
+# FastAPI setup
 # ────────────────────────────────────────────────────────────────────
-app = FastAPI(title="ClearTrack API – Indian Stocks (NSE)")
+app = FastAPI(title="ClearTrack API – Indian Stocks (yfinance)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -131,7 +97,7 @@ app.add_middleware(
 )
 
 # ────────────────────────────────────────────────────────────────────
-#  Pydantic models
+# Pydantic model
 # ────────────────────────────────────────────────────────────────────
 class StockPrice(BaseModel):
     ticker: str
@@ -140,20 +106,19 @@ class StockPrice(BaseModel):
     exchange: str = "NSE"
 
 # ────────────────────────────────────────────────────────────────────
-#  Routes
+# Routes
 # ────────────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
     return {
-        "message": "ClearTrack API for Indian stocks is running.",
-        "powered_by": "Official NSE JSON endpoint",
-        "cache_entries": len(price_cache),
-        "cache_ttl_seconds": CACHE_TTL_SECONDS,
+        "message": "ClearTrack API running with yfinance.",
+        "cache_entries": len(cache),
+        "cache_ttl_seconds": CACHE_TTL,
     }
 
 @app.get("/api/price/{ticker}", response_model=StockPrice)
-def get_single_price(ticker: str):
-    price = fetch_price_nse(ticker)
+def get_price(ticker: str):
+    price = fetch_price_yf(ticker)
     if price is None:
         raise HTTPException(
             status_code=404,
@@ -163,51 +128,41 @@ def get_single_price(ticker: str):
     return StockPrice(ticker=ticker.upper(), price=round(price, 2))
 
 @app.post("/api/prices")
-def get_multiple_prices(tickers: List[str]):
-    results: Dict[str, Dict] = {}
+def get_prices(tickers: List[str]):
+    out: Dict[str, Dict] = {}
     for t in tickers:
-        price = fetch_price_nse(t)
+        price = fetch_price_yf(t)
         if price is None:
-            results[t.upper()] = {"success": False, "error": "price_not_found"}
+            out[t.upper()] = {"success": False, "error": "price_not_found"}
         else:
-            results[t.upper()] = {
-                "success": True,
-                "price": round(price, 2),
-                "currency": "INR",
-            }
-    return results
-
-@app.get("/api/popular-stocks")
-def get_popular_stocks():
-    out = []
-    for symbol, name in POPULAR_TICKERS.items():
-        price = fetch_price_nse(symbol)
-        if price is not None:
-            out.append(
-                {
-                    "ticker": symbol,
-                    "name": name,
-                    "price": round(price, 2),
-                    "currency": "INR",
-                }
-            )
+            out[t.upper()] = {"success": True, "price": round(price, 2), "currency": "INR"}
     return out
 
+@app.get("/api/popular-stocks")
+def popular():
+    result = []
+    for sym, name in POPULAR.items():
+        price = fetch_price_yf(sym)
+        if price is not None:
+            result.append(
+                {"ticker": sym, "name": name, "price": round(price, 2), "currency": "INR"}
+            )
+    return result
+
 @app.get("/api/health")
-def health_check():
+def health():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "cache_entries": len(price_cache),
+        "cache_entries": len(cache),
     }
 
 # ────────────────────────────────────────────────────────────────────
-#  Local dev entry point  ➜  `python main.py`
-#  (Render will run the same uvicorn command automatically)
+# Local dev entry  ➜  python main.py
+# (Render will run uvicorn with these args automatically)
 # ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
-
     port = int(os.getenv("PORT", 8000))
-    print(f"\n🚀  Starting ClearTrack API on http://localhost:{port} (NSE)…\n")
+    print(f"\n🚀  Starting ClearTrack API at http://localhost:{port} …\n")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
