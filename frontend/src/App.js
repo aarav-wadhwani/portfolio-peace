@@ -20,7 +20,7 @@ import {
 // ✅ 1.  Set this to your Render URL in .env
 // CRA  : REACT_APP_API_URL=https://your-api.onrender.com
 // Vite : VITE_API_URL=https://your-api.onrender.com
-const API_BASE = import.meta?.env?.VITE_API_URL || process.env.REACT_APP_API_URL;
+const API_BASE = process.env.REACT_APP_API_URL;
 
 const emptyForm = { ticker: "", shares: "", purchasePrice: "" };
 
