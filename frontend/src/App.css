@@ -1,3 +1,12 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
 .App {
   min-height: 100vh;
   background-color: #fafafa;
@@ -13,6 +22,7 @@
 .App-header h1 {
   color: #4F46E5;
   margin: 0;
+  font-size: 2.5rem;
 }
 
 .App-header p {
@@ -47,6 +57,22 @@ main {
   margin: 0.5rem 0;
 }
 
+.profit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.profit.positive {
+  color: #10b981;
+}
+
+.profit.negative {
+  color: #ef4444;
+}
+
 .add-button {
   background: #4F46E5;
   color: white;
@@ -58,15 +84,134 @@ main {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 auto;
+  margin: 0 auto 2rem;
 }
 
 .add-button:hover {
   background: #4338CA;
 }
 
+.add-form {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.add-form h3 {
+  margin: 0 0 1rem 0;
+}
+
+.add-form input {
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.add-form input:focus {
+  outline: none;
+  border-color: #4F46E5;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.form-buttons button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.form-buttons button[type="submit"] {
+  background: #4F46E5;
+  color: white;
+}
+
+.form-buttons button[type="submit"]:hover {
+  background: #4338CA;
+}
+
+.form-buttons button[type="button"] {
+  background: #e5e5e5;
+}
+
+.holdings {
+  display: grid;
+  gap: 1rem;
+}
+
+.holding-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.holding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.holding-header h3 {
+  margin: 0;
+  color: #1a1a1a;
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.delete-btn:hover {
+  color: #ef4444;
+}
+
+.shares {
+  color: #666;
+  margin: 0 0 1rem 0;
+}
+
+.holding-value {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.positive {
+  color: #10b981;
+}
+
+.negative {
+  color: #ef4444;
+}
+
 .empty-state {
   text-align: center;
   color: #666;
   margin-top: 3rem;
+}
+
+@media (max-width: 600px) {
+  main {
+    padding: 1rem;
+  }
+  
+  .value {
+    font-size: 2.5rem;
+  }
 }
