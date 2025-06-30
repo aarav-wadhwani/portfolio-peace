@@ -19,7 +19,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",            # local dev
-        "https://cleartrack.vercel.app"     # production front-end
+        "https://portfolio-peace.vercel.app/" ,
+        "https://portfolio-peace.onrender.com"    # production front-end
     ],
     allow_credentials=True,
     allow_methods=["*"],
