@@ -196,10 +196,10 @@ export default function App() {
                 <YAxis
                   stroke="#666"
                   tick={{ fontSize: 12 }}
-                  tickFormatter={(v) => `$${v}`}
+                  tickFormatter={(v) => `Rs.${v}`}
                 />
                 <Tooltip
-                  formatter={(v) => `$${v}`}
+                  formatter={(v) => `Rs.${v}`}
                   contentStyle={{
                     backgroundColor: "#fff",
                     border: "1px solid #e0e0e0",
