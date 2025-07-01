@@ -1,4 +1,3 @@
-// App.js
 import "./App.css";
 import { useState, useEffect } from "react";
 import {
@@ -16,16 +15,13 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
+import { supabase } from "./supabaseClient";
 
-// ✅ 1.  Set this to your Render URL in .env
-// CRA  : REACT_APP_API_URL=https://your-api.onrender.com
-// Vite : VITE_API_URL=https://your-api.onrender.com
 const API_BASE = process.env.REACT_APP_API_URL;
-
 const emptyForm = { ticker: "", shares: "", purchasePrice: "" };
 
 export default function App() {
-  // ───────── State ─────────
+  // ─── State ───────────────────────────────────────────────────────
   const [holdings, setHoldings] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
@@ -33,19 +29,42 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // ───────── Helpers ─────────
+  // ─── Supabase: fetch holdings on first load ───────────────────────
+  useEffect(() => {
+    const loadHoldings = async () => {
+      const { data, error } = await supabase
+        .from("holdings")
+        .select("id,ticker,shares,purchase_price,current_price,created_at")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(error);
+        setErrorMsg("Failed to load saved holdings.");
+        return;
+      }
+
+      const formatted = data.map((d) => ({
+        id: d.id,
+        ticker: d.ticker,
+        shares: Number(d.shares),
+        purchasePrice: Number(d.purchase_price),
+        currentPrice: Number(d.current_price),
+      }));
+      setHoldings(formatted);
+    };
+
+    loadHoldings();
+  }, []);
+
+  // ─── Helper: live price from FastAPI backend ──────────────────────
   async function fetchLivePrice(ticker) {
-    try {
-      const res = await fetch(`${API_BASE}/api/price/${ticker}`);
-      if (!res.ok) throw new Error("Ticker not found on server");
-      const data = await res.json();
-      return data.price; // number
-    } catch (err) {
-      throw err;
-    }
+    const res = await fetch(`${API_BASE}/api/price/${ticker}`);
+    if (!res.ok) throw new Error("Ticker not found on server");
+    const data = await res.json();
+    return data.price;
   }
 
-  // ───────── Handle Add Holding ─────────
+  // ─── Add Holding ─────────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault();
     setErrorMsg("");
@@ -64,29 +83,47 @@ export default function App() {
     try {
       const livePrice = await fetchLivePrice(ticker);
 
+      // Save to Supabase
+      const { data, error } = await supabase
+        .from("holdings")
+        .insert({
+          ticker,
+          shares,
+          purchase_price: purchasePrice,
+          current_price: livePrice,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
       const newHolding = {
-        id: Date.now(),
+        id: data.id,
         ticker,
         shares,
         purchasePrice,
         currentPrice: livePrice,
       };
 
-      setHoldings((prev) => [...prev, newHolding]);
+      setHoldings((prev) => [newHolding, ...prev]);
       setFormData(emptyForm);
       setShowForm(false);
     } catch (err) {
-      setErrorMsg(err.message || "Could not fetch live price.");
+      setErrorMsg(err.message || "Could not save holding.");
     } finally {
       setLoading(false);
     }
   }
 
-  // ───────── Delete Holding ─────────
-  const deleteHolding = (id) =>
+  // ─── Delete Holding  (local + Supabase) ───────────────────────────
+  const deleteHolding = async (id) => {
+    // Remove locally first for snappy UI
     setHoldings((prev) => prev.filter((h) => h.id !== id));
+    const { error } = await supabase.from("holdings").delete().eq("id", id);
+    if (error) console.error("Delete failed:", error);
+  };
 
-  // ───────── Portfolio Summary ─────────
+  // ─── Portfolio Summary Calculations ───────────────────────────────
   const totalInvested = holdings.reduce(
     (sum, h) => sum + h.purchasePrice * h.shares,
     0
@@ -99,7 +136,7 @@ export default function App() {
   const profitPercent =
     totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
-  // ───────── Generate mock 30-day chart based on live holdings ─────────
+  // ─── Mock 30-day chart based on holdings ──────────────────────────
   useEffect(() => {
     if (!holdings.length) {
       setChartData([]);
@@ -107,13 +144,10 @@ export default function App() {
     }
 
     const days = 30;
-    const totalInvestedNow = totalInvested;
-
     const series = Array.from({ length: days }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - (days - i));
-      const randomFactor = 0.9 + Math.random() * 0.3;
-      const value = totalInvestedNow * randomFactor;
+      const value = totalInvested * (0.9 + Math.random() * 0.3);
 
       return {
         date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -121,15 +155,11 @@ export default function App() {
       };
     });
 
-    series.push({
-      date: "Today",
-      value: Number(totalValue.toFixed(2)),
-    });
-
+    series.push({ date: "Today", value: Number(totalValue.toFixed(2)) });
     setChartData(series);
   }, [holdings, totalInvested, totalValue]);
 
-  // ───────── JSX ─────────
+  // ─── JSX UI ───────────────────────────────────────────────────────
   return (
     <div className="App">
       <header className="App-header">
@@ -138,14 +168,12 @@ export default function App() {
       </header>
 
       <main>
-        {/* ── Summary ── */}
+        {/* Summary */}
         <div className="portfolio-summary">
           <h2>Portfolio Value</h2>
           <div className="value">${totalValue.toFixed(2)}</div>
           {totalInvested > 0 && (
-            <div
-              className={`profit ${totalProfit >= 0 ? "positive" : "negative"}`}
-            >
+            <div className={`profit ${totalProfit >= 0 ? "positive" : "negative"}`}>
               {totalProfit >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
               ${Math.abs(totalProfit).toFixed(2)} (
               {totalProfit >= 0 ? "+" : ""}
@@ -154,7 +182,7 @@ export default function App() {
           )}
         </div>
 
-        {/* ── Chart ── */}
+        {/* Chart */}
         {chartData.length > 0 && (
           <div className="chart-container">
             <h3>Portfolio Performance&nbsp;(Last 30 Days)</h3>
@@ -188,7 +216,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Add Button or Form ── */}
+        {/* Add Button / Form */}
         {!showForm && (
           <button className="add-button" onClick={() => setShowForm(true)}>
             <Plus size={20} /> Add Holding
@@ -203,9 +231,7 @@ export default function App() {
               type="text"
               placeholder="Stock ticker (e.g., RELIANCE)"
               value={formData.ticker}
-              onChange={(e) =>
-                setFormData({ ...formData, ticker: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, ticker: e.target.value })}
               required
             />
 
@@ -213,9 +239,7 @@ export default function App() {
               type="number"
               placeholder="Number of shares"
               value={formData.shares}
-              onChange={(e) =>
-                setFormData({ ...formData, shares: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, shares: e.target.value })}
               step="0.001"
               required
             />
@@ -251,7 +275,7 @@ export default function App() {
           </form>
         )}
 
-        {/* ── Holdings List ── */}
+        {/* Holdings List */}
         <div className="holdings">
           {holdings.map((h) => {
             const value = h.currentPrice * h.shares;
@@ -263,10 +287,7 @@ export default function App() {
               <div key={h.id} className="holding-card">
                 <div className="holding-header">
                   <h3>{h.ticker}</h3>
-                  <button
-                    className="delete-btn"
-                    onClick={() => deleteHolding(h.id)}
-                  >
+                  <button className="delete-btn" onClick={() => deleteHolding(h.id)}>
                     <CloseIcon size={18} />
                   </button>
                 </div>
