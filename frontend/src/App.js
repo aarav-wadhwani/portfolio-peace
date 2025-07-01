@@ -188,6 +188,7 @@ export default function App() {
       const { data, error } = await supabase
         .from("holdings")
         .select("*")
+        .eq("user_id", user.id) // ✅ Only fetch rows belonging to the logged-in user
         .order("created_at", { ascending: false });
 
       if (!error) {
@@ -200,8 +201,11 @@ export default function App() {
             currentPrice: Number(d.current_price),
           }))
         );
+      } else {
+        console.error("Error loading holdings:", error.message);
       }
     };
+
     loadHoldings();
   }, [user]);
 
