@@ -231,3 +231,27 @@ main {
   color: #1a1a1a;
   font-size: 1.25rem;
 }
+
+.suggestions-list {
+  list-style: none;
+  margin-top: 4px;
+  padding: 0;
+  border: 1px solid #ccc;
+  max-height: 120px;
+  overflow-y: auto;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  position: absolute;
+  z-index: 100;
+  width: 100%;
+}
+
+.suggestions-list li {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.suggestions-list li:hover {
+  background-color: #f2f2f2;
+}

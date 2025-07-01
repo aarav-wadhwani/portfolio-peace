@@ -16,6 +16,7 @@ import {
   Tooltip,
 } from "recharts";
 import { supabase } from "./supabaseClient";
+import { tickerList } from "./tickers"; // Add this at top of App.js
 
 const API_BASE = process.env.REACT_APP_API_URL;
 const emptyForm = { ticker: "", shares: "", purchasePrice: "" };
@@ -28,6 +29,8 @@ export default function App() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [filteredTickers, setFilteredTickers] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
   useEffect(() => {
@@ -231,7 +234,20 @@ export default function App() {
               type="text"
               placeholder="Stock ticker (e.g., RELIANCE)"
               value={formData.ticker}
-              onChange={(e) => setFormData({ ...formData, ticker: e.target.value })}
+              onChange={(e) => {
+                const input = e.target.value.toUpperCase();
+                setFormData({ ...formData, ticker: input });
+
+                if (input.length > 1) {
+                  const filtered = tickerList.filter((t) =>
+                    t.startsWith(input)
+                  );
+                  setFilteredTickers(filtered.slice(0, 5)); // show top 5 suggestions
+                  setShowSuggestions(true);
+                } else {
+                  setShowSuggestions(false);
+                }
+              }}
               required
             />
 
@@ -254,7 +270,22 @@ export default function App() {
               step="0.01"
               required
             />
-
+            {showSuggestions && filteredTickers.length > 0 && (
+              <ul className="suggestions-list">
+                {filteredTickers.map((ticker, idx) => (
+                  <li
+                    key={idx}
+                    onClick={() => {
+                      setFormData({ ...formData, ticker });
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    {ticker}
+                  </li>
+                ))}
+              </ul>
+            )}
+            
             {errorMsg && <p className="error">{errorMsg}</p>}
 
             <div className="form-buttons">
