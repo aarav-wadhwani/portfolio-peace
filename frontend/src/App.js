@@ -251,6 +251,22 @@ export default function App() {
               required
             />
 
+            {showSuggestions && filteredTickers.length > 0 && (
+              <ul className="suggestions-list">
+                {filteredTickers.map((ticker, idx) => (
+                  <li
+                    key={idx}
+                    onClick={() => {
+                      setFormData({ ...formData, ticker });
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    {ticker}
+                  </li>
+                ))}
+              </ul>
+            )}
+
             <input
               type="number"
               placeholder="Number of shares"
@@ -270,21 +286,6 @@ export default function App() {
               step="0.01"
               required
             />
-            {showSuggestions && filteredTickers.length > 0 && (
-              <ul className="suggestions-list">
-                {filteredTickers.map((ticker, idx) => (
-                  <li
-                    key={idx}
-                    onClick={() => {
-                      setFormData({ ...formData, ticker });
-                      setShowSuggestions(false);
-                    }}
-                  >
-                    {ticker}
-                  </li>
-                ))}
-              </ul>
-            )}
             
             {errorMsg && <p className="error">{errorMsg}</p>}
 
