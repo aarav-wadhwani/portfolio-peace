@@ -309,3 +309,10 @@ main {
   cursor: pointer;
 }
 .signout-btn:hover { color: #ef4444; }
+
+.auth-success {
+  color: #10b981;         /* green */
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}

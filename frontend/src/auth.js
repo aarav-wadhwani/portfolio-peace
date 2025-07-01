@@ -6,18 +6,36 @@ export default function Auth() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [message, setMessage] = useState(""); // ✅ success message
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setMessage("");
 
     const { email, password } = form;
-    try {
-      const { error: authError } = isSignUp
-        ? await supabase.auth.signUp({ email, password })
-        : await supabase.auth.signInWithPassword({ email, password });
 
-      if (authError) throw authError;
+    try {
+      if (isSignUp) {
+        // ── Sign-up flow ─────────────────────────
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (signUpError) throw signUpError;
+
+        // ✅ Show confirmation
+        setMessage(
+          "✅ A verification email has been sent. Please check your inbox."
+        );
+      } else {
+        // ── Sign-in flow ─────────────────────────
+        const { error: signInError } =
+          await supabase.auth.signInWithPassword({ email, password });
+
+        if (signInError) throw signInError;
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -43,11 +61,11 @@ export default function Auth() {
           required
         />
 
+        {/* Success or error feedback */}
+        {message && <p className="auth-success">{message}</p>}
         {error && <p className="auth-error">{error}</p>}
 
-        <button type="submit">
-          {isSignUp ? "Sign up" : "Sign in"}
-        </button>
+        <button type="submit">{isSignUp ? "Sign up" : "Sign in"}</button>
       </form>
 
       <p className="auth-toggle">
