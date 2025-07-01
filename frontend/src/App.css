@@ -1,195 +1,172 @@
-/*  ─── GLOBAL RESET ─────────────────────────────── */
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #fafafa;
-  color: #1a1a1a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
-/*  ─── LAYOUT UTILS ─────────────────────────────── */
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
+.App {
+  min-height: 100vh;
+  background-color: #fafafa;
 }
 
-/*  ─── HEADER ───────────────────────────────────── */
 .App-header {
-  background: #fff;
-  padding: 2rem 1rem;
+  background-color: white;
+  padding: 2rem;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .App-header h1 {
   color: #4F46E5;
   margin: 0;
-  font-size: 2.25rem;
-  letter-spacing: -0.5px;
+  font-size: 2.5rem;
 }
 
 .App-header p {
   color: #666;
-  margin-top: .5rem;
-  font-size: 0.95rem;
+  margin: 0.5rem 0 0 0;
 }
 
-/*  ─── SUMMARY CARD ─────────────────────────────── */
-.portfolio-summary {
-  background: #fff;
-  border-radius: 14px;
+main {
+  max-width: 800px;
+  margin: 0 auto;
   padding: 2rem;
+}
+
+.portfolio-summary {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
   text-align: center;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
   margin-bottom: 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .portfolio-summary h2 {
-  font-size: 0.95rem;
-  font-weight: 500;
+  font-size: 1rem;
   color: #666;
   margin: 0;
-  letter-spacing: .4px;
 }
 
 .value {
-  font-size: 2.75rem;
-  font-weight: 700;
-  margin: .6rem 0;
-  letter-spacing: -1px;
+  font-size: 3rem;
+  font-weight: bold;
+  margin: 0.5rem 0;
 }
 
 .profit {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
-  font-size: 1.2rem;
+  gap: 0.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
 }
 
-.profit.positive { color: #10b981; }
-.profit.negative { color: #ef4444; }
+.profit.positive {
+  color: #10b981;
+}
 
-/*  ─── ADD BUTTON ───────────────────────────────── */
+.profit.negative {
+  color: #ef4444;
+}
+
 .add-button {
+  background: #4F46E5;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #4F46E5;
-  color: #fff;
-  border: 0;
-  padding: 12px 28px;
-  border-radius: 10px;
-  font-size: 1rem;
-  cursor: pointer;
   margin: 0 auto 2rem;
-  transition: background .2s ease;
 }
-.add-button:hover { background: #4338CA; }
 
-/*  ─── ADD FORM ─────────────────────────────────── */
+.add-button:hover {
+  background: #4338CA;
+}
+
 .add-form {
-  background: #fff;
-  border-radius: 14px;
-  padding: 1.75rem;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   margin-bottom: 2rem;
 }
 
-.add-form h3 { margin: 0 0 1.25rem; }
-
-.form-field {        /* wrapper for each input */
-  position: relative;  /*  important for suggestions absolute positioning  */
-  margin-bottom: 1rem;
+.add-form h3 {
+  margin: 0 0 1rem 0;
 }
 
 .add-form input {
   width: 100%;
-  padding: .75rem .9rem;
-  font-size: 1rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
   border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border-radius: 6px;
+  font-size: 1rem;
 }
+
 .add-form input:focus {
   outline: none;
   border-color: #4F46E5;
 }
 
-/*  suggestions list now attaches to .form-field */
-.suggestions-list {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  margin: 4px 0 0;
-  padding: 0;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-  max-height: 160px;
-  overflow-y: auto;
-  list-style: none;
-  animation: fadeIn .12s ease-out;
-  z-index: 50;
-}
-
-.suggestions-list li {
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: .95rem;
-}
-.suggestions-list li:hover {
-  background: #f7f7f7;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/*  form buttons  */
 .form-buttons {
   display: flex;
-  justify-content: flex-end;
   gap: 1rem;
-  margin-top: .25rem;
+  justify-content: flex-end;
 }
+
 .form-buttons button {
-  padding: .55rem 1.2rem;
-  font-size: .95rem;
-  border: 0;
-  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
   cursor: pointer;
 }
-.form-buttons button[type="button"] { background: #e5e5e5; }
+
 .form-buttons button[type="submit"] {
   background: #4F46E5;
-  color: #fff;
+  color: white;
 }
-.form-buttons button[type="submit"]:hover { background: #4338CA; }
 
-/*  ─── HOLDINGS GRID ────────────────────────────── */
-.holdings { display: grid; gap: 1rem; }
+.form-buttons button[type="submit"]:hover {
+  background: #4338CA;
+}
+
+.form-buttons button[type="button"] {
+  background: #e5e5e5;
+}
+
+.holdings {
+  display: grid;
+  gap: 1rem;
+}
 
 .holding-card {
-  background: #fff;
-  padding: 1.4rem 1.6rem;
-  border-radius: 14px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.04);
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .holding-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: .4rem;
+  margin-bottom: 0.5rem;
 }
-.holding-header h3 { margin: 0; font-size: 1.05rem; }
+
+.holding-header h3 {
+  margin: 0;
+  color: #1a1a1a;
+}
 
 .delete-btn {
   background: none;
@@ -197,37 +174,87 @@ body {
   color: #999;
   cursor: pointer;
   padding: 4px;
-  transition: color .15s;
 }
-.delete-btn:hover { color: #ef4444; }
 
-.shares { color: #666; margin: 0 0 .8rem 0; }
+.delete-btn:hover {
+  color: #ef4444;
+}
+
+.shares {
+  color: #666;
+  margin: 0 0 1rem 0;
+}
 
 .holding-value {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-weight: 600;
 }
 
-/*  ─── CHART CONTAINER ─────────────────────────── */
-.chart-container {
-  background: #fff;
-  border-radius: 14px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+.positive {
+  color: #10b981;
 }
-.chart-container h3 { margin: 0 0 1rem; font-size: 1.15rem; }
 
-/*  ─── EMPTY STATE ─────────────────────────────── */
+.negative {
+  color: #ef4444;
+}
+
 .empty-state {
   text-align: center;
   color: #666;
   margin-top: 3rem;
-  font-size: 1rem;
 }
 
-/*  ─── RESPONSIVE ──────────────────────────────── */
 @media (max-width: 600px) {
-  .value { font-size: 2.3rem; }
+  main {
+    padding: 1rem;
+  }
+  
+  .value {
+    font-size: 2.5rem;
+  }
+}
+
+/* Add this to your existing App.css */
+
+.chart-container {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.chart-container h3 {
+  margin: 0 0 1rem 0;
+  color: #1a1a1a;
+  font-size: 1.25rem;
+}
+
+.suggestions-list {
+  list-style: none;
+  margin-top: 4px;
+  padding: 0;
+  border: 1px solid #ccc;
+  max-height: 120px;
+  overflow-y: auto;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  position: absolute;
+  z-index: 100;
+  width: 100%;
+}
+
+.autocomplete-wrapper {
+  position: relative;
+}
+.suggestions-list li {
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.suggestions-list li:hover {
+  background-color: #f2f2f2;
 }

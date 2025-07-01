@@ -174,11 +174,11 @@ export default function App() {
         {/* Summary */}
         <div className="portfolio-summary">
           <h2>Portfolio Value</h2>
-          <div className="value">${totalValue.toFixed(2)}</div>
+          <div className="value">Rs.{totalValue.toFixed(2)}</div>
           {totalInvested > 0 && (
             <div className={`profit ${totalProfit >= 0 ? "positive" : "negative"}`}>
               {totalProfit >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
-              ${Math.abs(totalProfit).toFixed(2)} (
+              Rs.{Math.abs(totalProfit).toFixed(2)} (
               {totalProfit >= 0 ? "+" : ""}
               {profitPercent.toFixed(1)}%)
             </div>
@@ -229,44 +229,44 @@ export default function App() {
         {showForm && (
           <form className="add-form" onSubmit={handleSubmit}>
             <h3>Add New Holding</h3>
+              <div className="autocomplete-wrapper">
+                <input
+                  type="text"
+                  placeholder="Stock ticker (e.g., RELIANCE)"
+                  value={formData.ticker}
+                  onChange={(e) => {
+                    const input = e.target.value.toUpperCase();
+                    setFormData({ ...formData, ticker: input });
 
-            <input
-              type="text"
-              placeholder="Stock ticker (e.g., RELIANCE)"
-              value={formData.ticker}
-              onChange={(e) => {
-                const input = e.target.value.toUpperCase();
-                setFormData({ ...formData, ticker: input });
-
-                if (input.length > 1) {
-                  const filtered = tickerList.filter((t) =>
-                    t.startsWith(input)
-                  );
-                  setFilteredTickers(filtered.slice(0, 5)); // show top 5 suggestions
-                  setShowSuggestions(true);
-                } else {
-                  setShowSuggestions(false);
-                }
-              }}
-              required
-            />
-
-            {showSuggestions && filteredTickers.length > 0 && (
-              <ul className="suggestions-list">
-                {filteredTickers.map((ticker, idx) => (
-                  <li
-                    key={idx}
-                    onClick={() => {
-                      setFormData({ ...formData, ticker });
+                    if (input.length > 1) {
+                      const filtered = tickerList.filter((t) =>
+                        t.startsWith(input)
+                      );
+                      setFilteredTickers(filtered.slice(0, 5)); // show top 5 suggestions
+                      setShowSuggestions(true);
+                    } else {
                       setShowSuggestions(false);
-                    }}
-                  >
-                    {ticker}
-                  </li>
-                ))}
-              </ul>
-            )}
+                    }
+                  }}
+                  required
+                />
 
+                {showSuggestions && filteredTickers.length > 0 && (
+                  <ul className="suggestions-list">
+                    {filteredTickers.map((ticker, idx) => (
+                      <li
+                        key={idx}
+                        onClick={() => {
+                          setFormData({ ...formData, ticker });
+                          setShowSuggestions(false);
+                        }}
+                      >
+                        {ticker}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             <input
               type="number"
               placeholder="Number of shares"
@@ -329,7 +329,7 @@ export default function App() {
                 </p>
 
                 <div className="holding-value">
-                  <span>Current Value: ${value.toFixed(2)}</span>
+                  <span>Current Value: Rs.{value.toFixed(2)}</span>
                   <span className={profit >= 0 ? "positive" : "negative"}>
                     {profit >= 0 ? "+" : ""}
                     {profitPct.toFixed(1)}%
