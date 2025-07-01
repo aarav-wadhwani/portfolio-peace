@@ -16,7 +16,8 @@ import {
   Tooltip,
 } from "recharts";
 import { supabase } from "./supabaseClient";
-import { tickerList } from "./tickers"; // Add this at top of App.js
+import { tickerList } from "./tickers";
+import Auth from "./auth";
 
 const API_BASE = process.env.REACT_APP_API_URL;
 const emptyForm = { ticker: "", shares: "", purchasePrice: "" };
@@ -31,6 +32,8 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const [filteredTickers, setFilteredTickers] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
   useEffect(() => {
@@ -102,10 +105,10 @@ export default function App() {
 
       const newHolding = {
         id: data.id,
-        ticker,
-        shares,
-        purchasePrice,
-        currentPrice: livePrice,
+        ticker: data.ticker,
+        shares: Number(data.shares),
+        purchasePrice: Number(data.purchase_price),
+        currentPrice: Number(data.current_price),
       };
 
       setHoldings((prev) => [newHolding, ...prev]);
@@ -161,6 +164,50 @@ export default function App() {
     series.push({ date: "Today", value: Number(totalValue.toFixed(2)) });
     setChartData(series);
   }, [holdings, totalInvested, totalValue]);
+
+  // ── Track auth session ──
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  // ── Modify loadHoldings to fetch only after user is set ──
+  useEffect(() => {
+    if (!user) return;
+
+    const loadHoldings = async () => {
+      const { data, error } = await supabase
+        .from("holdings")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error) {
+        setHoldings(
+          data.map((d) => ({
+            id: d.id,
+            ticker: d.ticker,
+            shares: Number(d.shares),
+            purchasePrice: Number(d.purchase_price),
+            currentPrice: Number(d.current_price),
+          }))
+        );
+      }
+    };
+    loadHoldings();
+  }, [user]);
+
+  if (authLoading) return null;           // wait for Supabase to init
+  if (!user) return <Auth />;             // show sign-in / sign-up UI
+
 
   // ─── JSX UI ───────────────────────────────────────────────────────
   return (
