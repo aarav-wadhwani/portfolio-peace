@@ -157,43 +157,51 @@ export default function App() {
         const validHoldings = holdings.filter((h) => h.purchaseDate);
         const histories = await Promise.all(
           validHoldings.map(async (h) => {
-            const formattedStart = new Date(h.purchaseDate).toISOString().split("T")[0];
-            const res = await fetch(
-              `${API_BASE}/api/history/${h.ticker}?start=${formattedStart}`
-            );
-            if (!res.ok) {
-              throw new Error(`Failed to fetch history for ${h.ticker}`);
-            }
+            const start = new Date(h.purchaseDate).toISOString().split("T")[0];
+            const res = await fetch(`${API_BASE}/api/history/${h.ticker}?start=${start}`);
+            if (!res.ok) throw new Error(`Failed to fetch history for ${h.ticker}`);
             return res.json();
           })
         );
 
-        const dateMap = {};
-        histories.forEach((hist, idx) => {
-          const holding = validHoldings[idx];
-          hist?.series?.forEach?.((pt) => {
-            const val = pt.close * holding.shares;
-            dateMap[pt.date] = (dateMap[pt.date] || 0) + val;
+        // 1) Build a map of date → total portfolio value on that date
+        const valueMap = {};
+        histories.forEach((hist, i) => {
+          const { shares } = validHoldings[i];
+          hist.series.forEach((pt) => {
+            valueMap[pt.date] = (valueMap[pt.date] || 0) + pt.close * shares;
           });
         });
 
-        const totalInvestedConst = validHoldings.reduce(
-          (sum, h) => sum + h.purchasePrice * h.shares,
-          0
-        );
+        // 2) Build a sorted list of all dates
+        const sortedDates = Object.keys(valueMap).sort();
 
-        const sortedDates = Object.keys(dateMap).sort();
-        const downsampleRate = Math.ceil(sortedDates.length / 100); // Max 100 points
+        // 3) Build investMap: date → cumulative invested up to that date
+        const investMap = {};
+        let cumulative = 0;
+        sortedDates.forEach((date) => {
+          // add any holdings purchased on this date
+          validHoldings.forEach((h) => {
+            if (h.purchaseDate === date) {
+              cumulative += h.purchasePrice * h.shares;
+            }
+          });
+          investMap[date] = cumulative;
+        });
 
+        // 4) Downsample if needed
+        const downsampleRate = Math.ceil(sortedDates.length / 100);
+
+        // 5) Build final series with profit = value − invested to date
         const series = sortedDates
-          .filter((_, idx) => idx % downsampleRate === 0) // keep every nth point
-          .map((d) => ({
-            date: new Date(d).toLocaleDateString("en-US", {
+          .filter((_, idx) => idx % downsampleRate === 0)
+          .map((date) => ({
+            date: new Date(date).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
             }),
-            value: Number(dateMap[d].toFixed(2)),
-            profit: Number((dateMap[d] - totalInvestedConst).toFixed(2)),
+            value: Number(valueMap[date].toFixed(2)),
+            profit: Number((valueMap[date] - investMap[date]).toFixed(2)),
           }));
 
         setChartData(series);
