@@ -154,27 +154,29 @@ export default function App() {
 
     const buildChart = async () => {
       try {
-        // 1) fetch history for each holding (parallel)
+        const validHoldings = holdings.filter((h) => h.purchaseDate);
         const histories = await Promise.all(
-          holdings.map((h) =>
-            fetch(
+          validHoldings.map(async (h) => {
+            const res = await fetch(
               `${API_BASE}/api/history/${h.ticker}?start=${h.purchaseDate}`
-            ).then((r) => r.json())
-          )
+            );
+            if (!res.ok) {
+              throw new Error(`Failed to fetch history for ${h.ticker}`);
+            }
+            return res.json();
+          })
         );
 
-        // 2) aggregate portfolio value per date
-        const dateMap = {}; // { "YYYY-MM-DD": value }
+        const dateMap = {};
         histories.forEach((hist, idx) => {
-          const holding = holdings[idx];
-          hist.series.forEach((pt) => {
+          const holding = validHoldings[idx];
+          hist?.series?.forEach?.((pt) => {
             const val = pt.close * holding.shares;
             dateMap[pt.date] = (dateMap[pt.date] || 0) + val;
           });
         });
 
-        // 3) build sorted series & profit
-        const totalInvestedConst = holdings.reduce(
+        const totalInvestedConst = validHoldings.reduce(
           (sum, h) => sum + h.purchasePrice * h.shares,
           0
         );
@@ -199,7 +201,6 @@ export default function App() {
 
     buildChart();
   }, [holdings]);
-
 
   // ── Track auth session ──
   useEffect(() => {
