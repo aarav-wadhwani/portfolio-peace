@@ -157,8 +157,9 @@ export default function App() {
         const validHoldings = holdings.filter((h) => h.purchaseDate);
         const histories = await Promise.all(
           validHoldings.map(async (h) => {
+            const formattedStart = new Date(h.purchaseDate).toISOString().split("T")[0];
             const res = await fetch(
-              `${API_BASE}/api/history/${h.ticker}?start=${h.purchaseDate}`
+              `${API_BASE}/api/history/${h.ticker}?start=${formattedStart}`
             );
             if (!res.ok) {
               throw new Error(`Failed to fetch history for ${h.ticker}`);

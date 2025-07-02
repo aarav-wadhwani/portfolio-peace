@@ -103,6 +103,15 @@ def fetch_history_yf(
     Returns list of {"date": "YYYY-MM-DD", "close": float}
     """
 
+    print(f"[DEBUG] fetch_history_yf called with ticker={ticker}, start={start}, end={end}")
+
+    try:
+        datetime.strptime(start, "%Y-%m-%d")
+    except ValueError:
+        print(f"[ERROR] Invalid start date format: {start}")
+        return []
+
+
     ticker = ticker.strip().upper()
     end = end or datetime.utcnow().date().isoformat()
     key = (ticker, start, end)
