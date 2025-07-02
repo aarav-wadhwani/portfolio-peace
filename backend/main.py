@@ -140,9 +140,18 @@ def fetch_history_yf(
             .rename(columns={"Date": "date", "Close": "close"})
         )
         series["date"] = series["date"].dt.date.astype(str)
-        output = series.to_dict(orient="records")
+        output = [
+            {"date": row["date"], "close": row["close"]}
+            for row in series.to_dict(orient="records")
+            if isinstance(row["close"], (int, float)) and row["close"] is not None
+        ]
 
+        if not output:
+            print(f"[YF] No valid data for {ticker} from {start} to {end}")
+            return []
+        
         hist_cache[key] = {"series": output, "ts": time.time()}
+        
         return output
 
     except Exception as e:
