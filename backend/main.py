@@ -98,66 +98,64 @@ def fetch_history_yf(
     ticker: str,
     start: str,
     end: str | None = None,
-) -> list[dict]:
+    ) -> list[dict]:
     """
     Returns list of {"date": "YYYY-MM-DD", "close": float}
     """
 
     print(f"[DEBUG] fetch_history_yf called with ticker={ticker}, start={start}, end={end}")
-
+    # Validate date
     try:
         datetime.strptime(start, "%Y-%m-%d")
     except ValueError:
         print(f"[ERROR] Invalid start date format: {start}")
         return []
 
-
     ticker = ticker.strip().upper()
+    yf_symbol = f"{ticker}.NS"
     end = end or datetime.utcnow().date().isoformat()
-    key = (ticker, start, end)
+    cache_key = (ticker, start, end)
 
-    # serve from cache if fresh
-    cached = hist_cache.get(key)
+    # Return cached if fresh
+    cached = hist_cache.get(cache_key)
     if cached and time.time() - cached["ts"] < HIST_CACHE_TTL:
         return cached["series"]
 
-    yf_symbol = f"{ticker}.NS"
     try:
-        df = yf.download(
-            yf_symbol,
+        # Use Ticker.history() instead of download()
+        stock = yf.Ticker(yf_symbol)
+        hist = stock.history(
             start=start,
             end=end,
             interval="1d",
+            auto_adjust=True,   # or False, per your preference
             progress=False,
-            threads=False,
-            auto_adjust=True,  # or False, depending on your preference
         )
-        if df.empty or "Close" not in df.columns:
-            print(f"[YF] Download failed or missing 'Close' for {ticker}. DataFrame:\n{df}")
+
+        if hist.empty or "Close" not in hist.columns:
+            print(f"[YF] Empty or no 'Close' for {ticker}.")
             return []
 
-        series = (
-            df["Close"]
-            .reset_index()
-            .rename(columns={"Date": "date", "Close": "close"})
-        )
-        series["date"] = series["date"].dt.date.astype(str)
-        output = [
-            {"date": row["date"], "close": row["close"]}
-            for row in series.to_dict(orient="records")
-            if isinstance(row["close"], (int, float)) and row["close"] is not None
-        ]
+        output = []
+        for dt, row in hist.iterrows():
+            close = row.get("Close")
+            if close is None:
+                continue
+            output.append({
+                "date": dt.date().isoformat(),
+                "close": round(float(close), 2),
+            })
 
         if not output:
             print(f"[YF] No valid data for {ticker} from {start} to {end}")
             return []
-        
-        hist_cache[key] = {"series": output, "ts": time.time()}
-        
+
+        # Cache and return
+        hist_cache[cache_key] = {"series": output, "ts": time.time()}
         return output
 
     except Exception as e:
-        print(f"[YF] history download failed for {ticker}: {e}")
+        print(f"[YF] history() failed for {ticker}: {e}")
         return []
 
 
