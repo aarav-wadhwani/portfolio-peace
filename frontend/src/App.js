@@ -487,16 +487,18 @@ export default function App() {
               <div key={h.id} className="holding-card">
                 <div className="holding-header">
                   <h3>{h.ticker}</h3>
-                  {editingId === h.id ? (
-                    <button className="delete-btn" onClick={cancelEdit}>✕</button>
-                  ) : (
-                    <>
-                      <button className="delete-btn" onClick={() => startEdit(h)}>✎</button>
-                      <button className="delete-btn" onClick={() => deleteHolding(h.id)}>
-                        <CloseIcon size={18} />
-                      </button>
-                    </>
-                  )}
+                  <div className="holding-actions">
+                    {editingId === h.id ? (
+                      <button className="delete-btn" onClick={cancelEdit}>✕</button>
+                    ) : (
+                      <>
+                        <button className="edit-btn" onClick={() => startEdit(h)}>✎</button>
+                        <button className="delete-btn" onClick={() => deleteHolding(h.id)}>
+                          <CloseIcon size={18} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {editingId === h.id ? (
