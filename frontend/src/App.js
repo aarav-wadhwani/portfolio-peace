@@ -182,8 +182,11 @@ export default function App() {
           0
         );
 
-        const series = Object.keys(dateMap)
-          .sort()
+        const sortedDates = Object.keys(dateMap).sort();
+        const downsampleRate = Math.ceil(sortedDates.length / 100); // Max 100 points
+
+        const series = sortedDates
+          .filter((_, idx) => idx % downsampleRate === 0) // keep every nth point
           .map((d) => ({
             date: new Date(d).toLocaleDateString("en-US", {
               month: "short",
