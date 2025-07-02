@@ -129,7 +129,6 @@ def fetch_history_yf(
             end=end,
             interval="1d",
             auto_adjust=True,   # or False, per your preference
-            progress=False,
         )
 
         if hist.empty or "Close" not in hist.columns:
