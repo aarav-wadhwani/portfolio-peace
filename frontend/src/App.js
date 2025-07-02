@@ -34,6 +34,8 @@ export default function App() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ shares: "", purchasePrice: "" });
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
   useEffect(() => {
@@ -132,6 +134,60 @@ export default function App() {
     if (error) console.error("Delete failed:", error);
   };
 
+  
+
+  // ─── Edit Holding ───────────────────────────────
+  const startEdit = (h) => {
+    setEditingId(h.id);
+    setEditForm({
+      shares: h.shares.toString(),
+      purchasePrice: h.purchasePrice.toString(),
+    });
+  };
+
+  // Handler to cancel editing
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ shares: "", purchasePrice: "" });
+  };
+
+  // Handler to save changes
+  const saveEdit = async (id) => {
+    const shares = parseFloat(editForm.shares);
+    const purchase_price = parseFloat(editForm.purchasePrice);
+    if (!shares || !purchase_price) return;
+
+    // 1) Update Supabase
+    const { error, data } = await supabase
+      .from("holdings")
+      .update({ shares, purchase_price })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Update failed:", error);
+      return;
+    }
+
+    // 2) Update local state
+    setHoldings((prev) =>
+      prev.map((h) =>
+        h.id === id
+          ? {
+              ...h,
+              shares,
+              purchasePrice: purchase_price,
+              // optionally re-fetch current price:
+              currentPrice: h.currentPrice,
+            }
+          : h
+      )
+    );
+    cancelEdit();
+  };
+  
+  
   // ─── Portfolio Summary Calculations ───────────────────────────────
   const totalInvested = holdings.reduce(
     (sum, h) => sum + h.purchasePrice * h.shares,
@@ -144,6 +200,7 @@ export default function App() {
   const totalProfit = totalValue - totalInvested;
   const profitPercent =
     totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+
 
   // ─── Real profit/loss chart based on purchase dates ───────────────
   useEffect(() => {
@@ -430,22 +487,48 @@ export default function App() {
               <div key={h.id} className="holding-card">
                 <div className="holding-header">
                   <h3>{h.ticker}</h3>
-                  <button className="delete-btn" onClick={() => deleteHolding(h.id)}>
-                    <CloseIcon size={18} />
-                  </button>
+                  {editingId === h.id ? (
+                    <button className="delete-btn" onClick={cancelEdit}>✕</button>
+                  ) : (
+                    <>
+                      <button className="delete-btn" onClick={() => startEdit(h)}>✎</button>
+                      <button className="delete-btn" onClick={() => deleteHolding(h.id)}>
+                        <CloseIcon size={18} />
+                      </button>
+                    </>
+                  )}
                 </div>
 
-                <p className="shares">
-                  {h.shares} share{h.shares !== 1 ? "s" : ""} @ Rs.{h.purchasePrice} on {h.purchaseDate}
-                </p>
-
-                <div className="holding-value">
-                  <span>Current Value: Rs.{value.toFixed(2)}</span>
-                  <span className={profit >= 0 ? "positive" : "negative"}>
-                    {profit >= 0 ? "+" : ""}
-                    {profitPct.toFixed(1)}%
-                  </span>
-                </div>
+                {editingId === h.id ? (
+                  <div className="edit-form">
+                    <input
+                      type="number"
+                      value={editForm.shares}
+                      onChange={(e) => setEditForm({...editForm, shares: e.target.value})}
+                      step="0.001"
+                    />
+                    <input
+                      type="number"
+                      value={editForm.purchasePrice}
+                      onChange={(e) => setEditForm({...editForm, purchasePrice: e.target.value})}
+                      step="0.01"
+                    />
+                    <button onClick={() => saveEdit(h.id)}>Save</button>
+                    <button onClick={cancelEdit}>Cancel</button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="shares">
+                      {h.shares} share{h.shares !== 1 ? "s" : ""} @ Rs.{h.purchasePrice} on {h.purchaseDate}
+                    </p>
+                    <div className="holding-value">
+                      <span>Current Value: Rs.{(h.currentPrice*h.shares).toFixed(2)}</span>
+                      <span className={h.currentPrice*h.shares - h.purchasePrice*h.shares >= 0 ? "positive":"negative"}>
+                        {((h.currentPrice*h.shares - h.purchasePrice*h.shares)/ (h.purchasePrice*h.shares)*100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
