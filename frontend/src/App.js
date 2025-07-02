@@ -20,7 +20,7 @@ import { tickerList } from "./tickers";
 import Auth from "./auth";
 
 const API_BASE = process.env.REACT_APP_API_URL;
-const emptyForm = { ticker: "", shares: "", purchasePrice: "" };
+const emptyForm = { ticker: "", shares: "", purchasePrice: "", purchaseDate: "" };
 
 export default function App() {
   // ─── State ───────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export default function App() {
     const loadHoldings = async () => {
       const { data, error } = await supabase
         .from("holdings")
-        .select("id,ticker,shares,purchase_price,current_price,created_at")
+        .select("id,ticker,shares,purchase_price,current_price,purchase_date,created_at")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -79,6 +79,7 @@ export default function App() {
     const ticker = formData.ticker.trim().toUpperCase();
     const shares = parseFloat(formData.shares);
     const purchasePrice = parseFloat(formData.purchasePrice);
+    const purchaseDate   = formData.purchaseDate;
 
     if (!ticker || !shares || !purchasePrice) {
       setErrorMsg("Please fill in all fields correctly.");
@@ -97,6 +98,7 @@ export default function App() {
           shares,
           purchase_price: purchasePrice,
           current_price: livePrice,
+          purchase_date: purchaseDate,
         })
         .select()
         .single();
@@ -109,6 +111,7 @@ export default function App() {
         shares: Number(data.shares),
         purchasePrice: Number(data.purchase_price),
         currentPrice: Number(data.current_price),
+        purchaseDate: data.purchase_date,
       };
 
       setHoldings((prev) => [newHolding, ...prev]);
@@ -142,28 +145,61 @@ export default function App() {
   const profitPercent =
     totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
-  // ─── Mock 30-day chart based on holdings ──────────────────────────
+  // ─── Real profit/loss chart based on purchase dates ───────────────
   useEffect(() => {
     if (!holdings.length) {
       setChartData([]);
       return;
     }
 
-    const days = 30;
-    const series = Array.from({ length: days }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (days - i));
-      const value = totalInvested * (0.9 + Math.random() * 0.3);
+    const buildChart = async () => {
+      try {
+        // 1) fetch history for each holding (parallel)
+        const histories = await Promise.all(
+          holdings.map((h) =>
+            fetch(
+              `${API_BASE}/api/history/${h.ticker}?start=${h.purchaseDate}`
+            ).then((r) => r.json())
+          )
+        );
 
-      return {
-        date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        value: Number(value.toFixed(2)),
-      };
-    });
+        // 2) aggregate portfolio value per date
+        const dateMap = {}; // { "YYYY-MM-DD": value }
+        histories.forEach((hist, idx) => {
+          const holding = holdings[idx];
+          hist.series.forEach((pt) => {
+            const val = pt.close * holding.shares;
+            dateMap[pt.date] = (dateMap[pt.date] || 0) + val;
+          });
+        });
 
-    series.push({ date: "Today", value: Number(totalValue.toFixed(2)) });
-    setChartData(series);
-  }, [holdings, totalInvested, totalValue]);
+        // 3) build sorted series & profit
+        const totalInvestedConst = holdings.reduce(
+          (sum, h) => sum + h.purchasePrice * h.shares,
+          0
+        );
+
+        const series = Object.keys(dateMap)
+          .sort()
+          .map((d) => ({
+            date: new Date(d).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            }),
+            value: Number(dateMap[d].toFixed(2)),
+            profit: Number((dateMap[d] - totalInvestedConst).toFixed(2)),
+          }));
+
+        setChartData(series);
+      } catch (err) {
+        console.error("Chart build failed:", err);
+        setChartData([]);
+      }
+    };
+
+    buildChart();
+  }, [holdings]);
+
 
   // ── Track auth session ──
   useEffect(() => {
@@ -199,6 +235,7 @@ export default function App() {
             shares: Number(d.shares),
             purchasePrice: Number(d.purchase_price),
             currentPrice: Number(d.current_price),
+            purchaseDate: d.purchase_date,
           }))
         );
       } else {
@@ -239,7 +276,7 @@ export default function App() {
         {/* Chart */}
         {chartData.length > 0 && (
           <div className="chart-container">
-            <h3>Portfolio Performance&nbsp;(Last 30 Days)</h3>
+            <h3>Portfolio Profit / Loss</h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -259,7 +296,7 @@ export default function App() {
                 />
                 <Line
                   type="monotone"
-                  dataKey="value"
+                  dataKey="profit"
                   stroke="#4F46E5"
                   strokeWidth={2}
                   dot={{ fill: "#4F46E5", r: 3 }}
@@ -318,6 +355,16 @@ export default function App() {
                   </ul>
                 )}
               </div>
+            
+            <input
+              type="date"
+              value={formData.purchaseDate}
+              onChange={(e) =>
+                setFormData({ ...formData, purchaseDate: e.target.value })
+              }
+              required
+            />
+
             <input
               type="number"
               placeholder="Number of shares"
@@ -376,7 +423,7 @@ export default function App() {
                 </div>
 
                 <p className="shares">
-                  {h.shares} share{h.shares !== 1 ? "s" : ""} @ ${h.purchasePrice}
+                  {h.shares} share{h.shares !== 1 ? "s" : ""} @ Rs.{h.purchasePrice} on {h.purchaseDate}
                 </p>
 
                 <div className="holding-value">

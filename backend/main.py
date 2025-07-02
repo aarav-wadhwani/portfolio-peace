@@ -10,6 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+import pandas as pd
+from fastapi import Query 
+
 # ────────────────────────────────────────────────────────────────────
 # Config / env
 # ────────────────────────────────────────────────────────────────────
@@ -21,6 +24,10 @@ ALLOWED_ORIGINS = [
 ]
 
 CACHE_TTL = int(os.getenv("CACHE_TTL", 300))  # seconds (default 5 min)
+# Cache for historical data:  {(ticker,start,end): {"series": [...], "ts": float}}
+hist_cache: Dict[tuple, Dict] = {}
+HIST_CACHE_TTL = 60 * 60  # 1-hour cache
+
 
 POPULAR = {
     "RELIANCE": "Reliance Industries",
@@ -83,6 +90,57 @@ def fetch_price_yf(ticker: str) -> float | None:
     print(f"[YF] No price for {ticker}")
     return None
 
+
+# ────────────────────────────────────────────────────────────────────
+# Historical price fetch
+# ────────────────────────────────────────────────────────────────────
+def fetch_history_yf(
+    ticker: str,
+    start: str,
+    end: str | None = None,
+) -> list[dict]:
+    """
+    Returns list of {"date": "YYYY-MM-DD", "close": float}
+    """
+
+    ticker = ticker.strip().upper()
+    end = end or datetime.utcnow().date().isoformat()
+    key = (ticker, start, end)
+
+    # serve from cache if fresh
+    cached = hist_cache.get(key)
+    if cached and time.time() - cached["ts"] < HIST_CACHE_TTL:
+        return cached["series"]
+
+    yf_symbol = f"{ticker}.NS"
+    try:
+        df = yf.download(
+            yf_symbol,
+            start=start,
+            end=end,
+            interval="1d",
+            progress=False,
+            threads=False,
+        )
+        if df.empty:
+            raise ValueError("No data returned")
+
+        series = (
+            df["Close"]
+            .reset_index()
+            .rename(columns={"Date": "date", "Close": "close"})
+        )
+        series["date"] = series["date"].dt.date.astype(str)
+        output = series.to_dict(orient="records")
+
+        hist_cache[key] = {"series": output, "ts": time.time()}
+        return output
+
+    except Exception as e:
+        print(f"[YF] history download failed for {ticker}: {e}")
+        return []
+
+
 # ────────────────────────────────────────────────────────────────────
 # FastAPI setup
 # ────────────────────────────────────────────────────────────────────
@@ -105,6 +163,15 @@ class StockPrice(BaseModel):
     currency: str = "INR"
     exchange: str = "NSE"
 
+class PricePoint(BaseModel):
+    date: str   # YYYY-MM-DD
+    close: float
+
+class HistoryResponse(BaseModel):
+    ticker: str
+    series: List[PricePoint]
+
+
 # ────────────────────────────────────────────────────────────────────
 # Routes
 # ────────────────────────────────────────────────────────────────────
@@ -115,6 +182,23 @@ def root():
         "cache_entries": len(cache),
         "cache_ttl_seconds": CACHE_TTL,
     }
+
+@app.get("/api/history/{ticker}", response_model=HistoryResponse)
+def get_history(
+    ticker: str,
+    start: str = Query(..., description="YYYY-MM-DD"),
+    end: str | None = Query(None, description="YYYY-MM-DD (optional)"),
+):
+    """
+    Return daily closing prices from `start` to `end` (today if end is None)
+    """
+    series = fetch_history_yf(ticker, start, end)
+    if not series:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No historical data for '{ticker.upper()}' in given range.",
+        )
+    return {"ticker": ticker.upper(), "series": series}
 
 @app.get("/api/price/{ticker}", response_model=StockPrice)
 def get_price(ticker: str):
