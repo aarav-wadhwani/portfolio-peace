@@ -130,9 +130,11 @@ def fetch_history_yf(
             interval="1d",
             progress=False,
             threads=False,
+            auto_adjust=True,  # or False, depending on your preference
         )
-        if df.empty:
-            raise ValueError("No data returned")
+        if df.empty or "Close" not in df.columns:
+            print(f"[YF] Download failed or missing 'Close' for {ticker}. DataFrame:\n{df}")
+            return []
 
         series = (
             df["Close"]
