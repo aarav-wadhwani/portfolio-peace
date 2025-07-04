@@ -226,17 +226,18 @@ export default function App() {
   
     // ─── Real profit/loss chart based on purchase dates ───────────────
   useEffect(() => {
-    const validHoldings = holdings.filter((h) => h.purchaseDate && selectedIds.includes(h.id));
-    if (!validHoldings.length || !selectedIds.length) {
+    const filteredHoldings = holdings.filter(
+      (h) => h.purchaseDate && selectedIds.includes(h.id)
+    );
+    if (!filteredHoldings.length) {
       setChartData([]);
       return;
     }
 
     const buildChart = async () => {
       try {
-        const validHoldings = holdings.filter((h) => h.purchaseDate);
         const histories = await Promise.all(
-          validHoldings.map(async (h) => {
+          filteredHoldings.map(async (h) => {
             const start = new Date(h.purchaseDate).toISOString().split("T")[0];
             const res = await fetch(`${API_BASE}/api/history/${h.ticker}?start=${start}`);
             if (!res.ok) throw new Error(`Failed to fetch history for ${h.ticker}`);
@@ -244,24 +245,20 @@ export default function App() {
           })
         );
 
-        // 1) Build a map of date → total portfolio value on that date
         const valueMap = {};
         histories.forEach((hist, i) => {
-          const { shares } = validHoldings[i];
+          const { shares } = filteredHoldings[i];
           hist.series.forEach((pt) => {
             valueMap[pt.date] = (valueMap[pt.date] || 0) + pt.close * shares;
           });
         });
 
-        // 2) Build a sorted list of all dates
         const sortedDates = Object.keys(valueMap).sort();
 
-        // 3) Build investMap: date → cumulative invested up to that date
         const investMap = {};
         let cumulative = 0;
         sortedDates.forEach((date) => {
-          // add any holdings purchased on this date
-          validHoldings.forEach((h) => {
+          filteredHoldings.forEach((h) => {
             if (h.purchaseDate === date) {
               cumulative += h.purchasePrice * h.shares;
             }
@@ -269,10 +266,8 @@ export default function App() {
           investMap[date] = cumulative;
         });
 
-        // 4) Downsample if needed
         const downsampleRate = Math.ceil(sortedDates.length / 100);
 
-        // 5) Build final series with profit = value − invested to date
         const series = sortedDates
           .filter((_, idx) => idx % downsampleRate === 0)
           .map((date) => ({
@@ -292,7 +287,8 @@ export default function App() {
     };
 
     buildChart();
-  }, [holdings]);
+  }, [holdings, selectedIds]);
+
 
   // ── Track auth session ──
   useEffect(() => {
