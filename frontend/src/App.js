@@ -226,8 +226,7 @@ export default function App() {
   
     // ─── Real profit/loss chart based on purchase dates ───────────────
   useEffect(() => {
-    const validHoldings = holdings
-      .filter((h) => h.purchaseDate && selectedIds.includes(h.id));
+    const validHoldings = holdings.filter((h) => h.purchaseDate && selectedIds.includes(h.id));
     if (!validHoldings.length) {
       setChartData([]);
       return;
