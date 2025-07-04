@@ -36,6 +36,7 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ shares: "", purchasePrice: "" });
+  const [selectedIds, setSelectedIds] = useState([]);
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
   useEffect(() => {
@@ -202,9 +203,32 @@ export default function App() {
     totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
 
-  // ─── Real profit/loss chart based on purchase dates ───────────────
+  // initialise selection whenever holdings change
   useEffect(() => {
-    if (!holdings.length) {
+    setSelectedIds(holdings.map((h) => h.id));   // default = all selected
+  }, [holdings]);
+
+  // toggle entire list
+  const toggleSelectAll = () => {
+    if (selectedIds.length === holdings.length) {
+      setSelectedIds([]);           // unselect all
+    } else {
+      setSelectedIds(holdings.map((h) => h.id)); // select all
+    }
+  };
+
+  // toggle single holding
+  const toggleSelectOne = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+  
+    // ─── Real profit/loss chart based on purchase dates ───────────────
+  useEffect(() => {
+    const validHoldings = holdings
+      .filter((h) => h.purchaseDate && selectedIds.includes(h.id));
+    if (!validHoldings.length) {
       setChartData([]);
       return;
     }
@@ -343,6 +367,19 @@ export default function App() {
           )}
         </div>
 
+        {/* Select-All control */}
+        {holdings.length > 0 && (
+          <div style={{ margin: "0 0 1rem 0", display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.length === holdings.length}
+              onChange={toggleSelectAll}
+            />
+            <span style={{ fontSize: ".9rem" }}>
+              {selectedIds.length === holdings.length ? "Deselect all" : "Select all"}
+            </span>
+          </div>
+        )}
         {/* Chart */}
         {chartData.length > 0 && (
           <div className="chart-container">
@@ -440,7 +477,7 @@ export default function App() {
               placeholder="Number of shares"
               value={formData.shares}
               onChange={(e) => setFormData({ ...formData, shares: e.target.value })}
-              step="0.001"
+              step="1"
               required
             />
 
@@ -486,6 +523,12 @@ export default function App() {
             return (
               <div key={h.id} className="holding-card">
                 <div className="holding-header">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(h.id)}
+                    onChange={() => toggleSelectOne(h.id)}
+                    style={{ marginRight: ".6rem" }}
+                  />
                   <h3>{h.ticker}</h3>
                   <div className="holding-actions">
                     {editingId === h.id ? (
