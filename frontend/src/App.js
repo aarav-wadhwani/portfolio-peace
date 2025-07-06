@@ -40,6 +40,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortKey, setSortKey] = useState("");     // "pl", "plPct", "chgPct"
   const [sortDir, setSortDir] = useState("desc"); // "asc" | "desc"
+  const [timeline, setTimeline] = useState("all"); // "1d" | "5d" | "1m" | "1y" | "5y" | "all"
+
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
   useEffect(() => {
@@ -273,8 +275,6 @@ export default function App() {
           });
         });
 
-        const sortedDates = Object.keys(valueMap).sort();
-
         const investMap = {};
         let cumulative = 0;
         sortedDates.forEach((date) => {
@@ -285,6 +285,19 @@ export default function App() {
           });
           investMap[date] = cumulative;
         });
+
+        // timeline → number of days (Infinity == all-time)
+        const daysMap = { "1d": 1, "5d": 5, "1m": 30, "1y": 365, "5y": 1825, all: Infinity };
+        const maxDays = daysMap[timeline] ?? Infinity;
+
+        let sortedDates = Object.keys(valueMap).sort();
+
+        // apply cutoff if not "all"
+        if (maxDays !== Infinity) {
+          const cutoffISO = new Date(Date.now() - maxDays * 864e5).toISOString().split("T")[0];
+          sortedDates = sortedDates.filter((d) => d >= cutoffISO);
+        }
+
 
         const downsampleRate = Math.ceil(sortedDates.length / 100);
 
@@ -315,7 +328,7 @@ export default function App() {
     };
 
     buildChart();
-  }, [holdings, selectedIds]);
+  }, [holdings, selectedIds, timeline]);
 
 
   // ── Track auth session ──
@@ -427,6 +440,29 @@ export default function App() {
             </span>
           </div>
         )}
+        {/* Chart timeline*/}
+        {chartData.length > 0 && (
+          <div style={{ marginBottom: ".8rem" }}>
+            <select
+              value={timeline}
+              onChange={(e) => setTimeline(e.target.value)}
+              style={{
+                padding: "6px 10px",
+                fontSize: ".9rem",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+              }}
+            >
+              <option value="1d">1 Day</option>
+              <option value="5d">5 Days</option>
+              <option value="1m">1 Month</option>
+              <option value="1y">1 Year</option>
+              <option value="5y">5 Years</option>
+              <option value="all">All-time</option>
+            </select>
+          </div>
+        )}
+
         {/* Chart */}
         {chartData.length > 0 && (
           <div className="chart-container">
