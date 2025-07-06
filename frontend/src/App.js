@@ -398,8 +398,8 @@ export default function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>ClearTrack</h1>
-        <p>Your calm space for investment tracking</p>
+        <h1>OneGlance Finance</h1>
+        <p>All You Need, Nothing You Don’t.</p>
       </header>
 
       <main>
