@@ -21,7 +21,8 @@ load_dotenv()
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://portfolio-peace.vercel.app",  # ← your Vercel front-end
-    "https://oneglance.vercel.app"
+    "https://oneglance.vercel.app",
+    "https://portfolio-peace.onrender.com"
 ]
 
 CACHE_TTL = int(os.getenv("CACHE_TTL", 300))  # seconds (default 5 min)
