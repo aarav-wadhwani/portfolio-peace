@@ -373,10 +373,10 @@ export default function App() {
   const displayed = holdings
     .filter((h) => h.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
       if (!sortKey) {
         return dir * a.ticker.localeCompare(b.ticker);  // ✅ Alphabetical sort;
       }
-      const dir = sortDir === "asc" ? 1 : -1;
       if (sortKey === "ticker") {
         return dir * a.ticker.localeCompare(b.ticker);  // ✅ Alphabetical sort
       }
