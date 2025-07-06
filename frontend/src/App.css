@@ -367,17 +367,40 @@ main {
   margin-bottom: 1.2rem;
   flex-wrap: wrap;
   align-items: center;
+  width: 100%;
 }
 
-.search-input,
-.sort-select,
-.sort-dir-button {
+.search-input {
+  flex: 1;
+  min-width: 200px;
   font-size: 0.95rem;
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid #ccc;
   background-color: #fff;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sort-select {
+  flex: 0 0 200px;
+  min-width: 160px;
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sort-dir-button {
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  flex: 0 0 40px;
+  cursor: pointer;
+  background-color: #f9f9f9;
 }
 
 .search-input:focus,
