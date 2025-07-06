@@ -37,6 +37,9 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ shares: "", purchasePrice: "" });
   const [selectedIds, setSelectedIds] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortKey, setSortKey] = useState("");     // "pl", "plPct", "chgPct"
+  const [sortDir, setSortDir] = useState("desc"); // "asc" | "desc"
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
   useEffect(() => {
@@ -58,6 +61,7 @@ export default function App() {
         shares: Number(d.shares),
         purchasePrice: Number(d.purchase_price),
         currentPrice: Number(d.current_price),
+        yesterdayClose: Number(d.yesterday_close ?? 0), // add this in DB or set 0
       }));
       setHoldings(formatted);
     };
@@ -93,6 +97,19 @@ export default function App() {
     try {
       const livePrice = await fetchLivePrice(ticker);
 
+      // (quick fetch of yesterday close)
+      const histRes = await fetch(
+        `${API_BASE}/api/history/${ticker}?start=${new Date(Date.now() - 2*864e5)
+          .toISOString()
+          .split("T")[0]}`
+      );
+      let yesterdayClose = 0;
+      if (histRes.ok) {
+        const tmp = await histRes.json();
+        const len = tmp.series.length;
+        if (len >= 2) yesterdayClose = tmp.series[len - 2].close;
+      }
+
       // Save to Supabase
       const { data, error } = await supabase
         .from("holdings")
@@ -102,6 +119,7 @@ export default function App() {
           purchase_price: purchasePrice,
           current_price: livePrice,
           purchase_date: purchaseDate,
+          yesterday_close: yesterdayClose,
         })
         .select()
         .single();
@@ -201,6 +219,10 @@ export default function App() {
   const totalProfit = totalValue - totalInvested;
   const profitPercent =
     totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+  
+  // helper to compute daily % change (needs yesterdayClose)
+  const calcChangePct = (h) =>
+    h.yesterdayClose ? ((h.currentPrice - h.yesterdayClose) / h.yesterdayClose) * 100 : 0;
 
 
   // initialise selection whenever holdings change
@@ -286,7 +308,7 @@ export default function App() {
               profitPercent: Number(profitPercent.toFixed(2)),
             };
           });
-          
+
         setChartData(series);
       } catch (err) {
         console.error("Chart build failed:", err);
@@ -333,6 +355,7 @@ export default function App() {
             purchasePrice: Number(d.purchase_price),
             currentPrice: Number(d.current_price),
             purchaseDate: d.purchase_date,
+            yesterdayClose: Number(d.yesterday_close ?? 0),
           }))
         );
       } else {
@@ -346,6 +369,25 @@ export default function App() {
   if (authLoading) return null;           // wait for Supabase to init
   if (!user) return <Auth />;             // show sign-in / sign-up UI
 
+  // ─── Derived list after search & sort ──────────────────────────────
+  const displayed = holdings
+    .filter((h) => h.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (!sortKey) return 0;
+      const dir = sortDir === "asc" ? 1 : -1;
+      let va, vb;
+      if (sortKey === "pl") {
+        va = (a.currentPrice - a.purchasePrice) * a.shares;
+        vb = (b.currentPrice - b.purchasePrice) * b.shares;
+      } else if (sortKey === "plPct") {
+        va = ((a.currentPrice - a.purchasePrice) / a.purchasePrice) * 100;
+        vb = ((b.currentPrice - b.purchasePrice) / b.purchasePrice) * 100;
+      } else if (sortKey === "chgPct") {
+        va = calcChangePct(a);
+        vb = calcChangePct(b);
+      }
+      return dir * (va - vb);
+    });
 
   // ─── JSX UI ───────────────────────────────────────────────────────
   return (
@@ -530,9 +572,39 @@ export default function App() {
           </form>
         )}
 
+        {/* Search & Sort controls */}
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+          <input
+            type="text"
+            placeholder="Search ticker…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ flex: 1, padding: "6px 8px" }}
+          />
+
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value)}
+            style={{ padding: "6px 8px" }}
+          >
+            <option value="">Sort by…</option>
+            <option value="pl">Profit/Loss ₹</option>
+            <option value="plPct">Profit/Loss %</option>
+            <option value="chgPct">Price Change % (1d)</option>
+          </select>
+
+          <button
+            onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
+            style={{ padding: "6px 10px" }}
+          >
+            {sortDir === "asc" ? "↑" : "↓"}
+          </button>
+        </div>
+
+
         {/* Holdings List */}
         <div className="holdings">
-          {holdings.map((h) => {
+          {displayed.map((h) => {
             const value = h.currentPrice * h.shares;
             const cost = h.purchasePrice * h.shares;
             const profit = value - cost;
@@ -585,9 +657,12 @@ export default function App() {
                       {h.shares} share{h.shares !== 1 ? "s" : ""} @ Rs.{h.purchasePrice} on {h.purchaseDate}
                     </p>
                     <div className="holding-value">
-                      <span>Current Value: Rs.{(h.currentPrice*h.shares).toFixed(2)}</span>
-                      <span className={h.currentPrice*h.shares - h.purchasePrice*h.shares >= 0 ? "positive":"negative"}>
-                        {((h.currentPrice*h.shares - h.purchasePrice*h.shares)/ (h.purchasePrice*h.shares)*100).toFixed(1)}%
+                      <span>Current Value: Rs.{(h.currentPrice * h.shares).toFixed(2)}</span>
+                      <span className={h.currentPrice * h.shares - h.purchasePrice * h.shares >= 0 ? "positive" : "negative"}>
+                        {((h.currentPrice * h.shares - h.purchasePrice * h.shares) / (h.purchasePrice * h.shares) * 100).toFixed(1)}%
+                      </span>
+                      <span style={{ fontSize: ".85rem", color: "#888", marginLeft: "8px" }}>
+                        1d: {calcChangePct(h).toFixed(1)}%
                       </span>
                     </div>
                   </>
