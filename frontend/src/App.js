@@ -41,6 +41,18 @@ export default function App() {
   const [sortKey, setSortKey] = useState("");     // "pl", "plPct", "chgPct"
   const [sortDir, setSortDir] = useState("desc"); // "asc" | "desc"
   const [timeline, setTimeline] = useState("all"); // "1d" | "5d" | "1m" | "1y" | "5y" | "all"
+  const [theme, setTheme] = useState(
+    localStorage.getItem("theme") || 
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(theme === "light" ? "dark" : "light");
+
 
 
   // ─── Supabase: fetch holdings on first load ───────────────────────
@@ -409,6 +421,22 @@ export default function App() {
       <header className="App-header">
         <h1>OneGlance Finance</h1>
         <p>All You Need, Nothing You Don’t.</p>
+        <button
+          onClick={toggleTheme}
+          style={{
+            position: "absolute",
+            right: "1rem",
+            top: "1rem",
+            background: "none",
+            border: "none",
+            fontSize: "1.2rem",
+            cursor: "pointer",
+            color: "var(--text-sub)",
+          }}
+          title="Toggle dark mode"
+        >
+          {theme === "light" ? "🌙" : "☀️"}
+        </button>
       </header>
 
       <main>
