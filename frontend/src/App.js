@@ -275,17 +275,7 @@ export default function App() {
           });
         });
 
-        // timeline → number of days (Infinity == all-time)
-        const daysMap = { "1d": 1, "5d": 5, "1m": 30, "1y": 365, "5y": 1825, all: Infinity };
-        const maxDays = daysMap[timeline] ?? Infinity;
-
-        let sortedDates = Object.keys(valueMap).sort();
-
-        // apply cutoff if not "all"
-        if (maxDays !== Infinity) {
-          const cutoffISO = new Date(Date.now() - maxDays * 864e5).toISOString().split("T")[0];
-          sortedDates = sortedDates.filter((d) => d >= cutoffISO);
-        }
+        const sortedDates = Object.keys(valueMap).sort();
 
         const investMap = {};
         let cumulative = 0;
@@ -298,9 +288,19 @@ export default function App() {
           investMap[date] = cumulative;
         });
 
-        const downsampleRate = Math.ceil(sortedDates.length / 100);
+        const daysMap = { "1d": 1, "5d": 5, "1m": 30, "1y": 365, "5y": 1825, all: Infinity };
+        const maxDays = daysMap[timeline] ?? Infinity;
 
-        const series = sortedDates
+        const keptDates =
+          maxDays === Infinity
+          ? sortedDates
+          : sortedDates.filter(
+              (d) => d >= new Date(Date.now() - maxDays * 864e5).toISOString().split("T")[0]
+            );
+        
+        const downsampleRate = Math.ceil(keptDates.length / 100);
+
+        const series = keptDates
           .filter((_, idx) => idx % downsampleRate === 0)
           .map((date) => {
             const value = valueMap[date];
