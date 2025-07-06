@@ -224,7 +224,7 @@ export default function App() {
     );
   };
   
-    // ─── Real profit/loss chart based on purchase dates ───────────────
+  // ─── Real profit/loss chart based on purchase dates ───────────────
   useEffect(() => {
     const filteredHoldings = holdings.filter(
       (h) => h.purchaseDate && selectedIds.includes(h.id)
@@ -270,15 +270,23 @@ export default function App() {
 
         const series = sortedDates
           .filter((_, idx) => idx % downsampleRate === 0)
-          .map((date) => ({
-            date: new Date(date).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            }),
-            value: Number(valueMap[date].toFixed(2)),
-            profit: Number((valueMap[date] - investMap[date]).toFixed(2)),
-          }));
+          .map((date) => {
+            const value = valueMap[date];
+            const invested = investMap[date];
+            const profit = value - invested;
+            const profitPercent = invested > 0 ? (profit / invested) * 100 : 0;
 
+            return {
+              date: new Date(date).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              }),
+              value: Number(value.toFixed(2)),
+              profit: Number(profit.toFixed(2)),
+              profitPercent: Number(profitPercent.toFixed(2)),
+            };
+          });
+          
         setChartData(series);
       } catch (err) {
         console.error("Chart build failed:", err);
@@ -389,11 +397,26 @@ export default function App() {
                   tickFormatter={(v) => `Rs.${v}`}
                 />
                 <Tooltip
-                  formatter={(v) => `Rs.${v}`}
-                  contentStyle={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
+                  content={({ payload, label }) => {
+                    if (!payload || !payload.length) return null;
+                    const point = payload[0]?.payload;
+                    return (
+                      <div
+                        style={{
+                          backgroundColor: "#fff",
+                          border: "1px solid #e0e0e0",
+                          borderRadius: "8px",
+                          padding: "8px",
+                        }}
+                      >
+                        <strong>{label}</strong>
+                        <div>Profit: Rs.{point.profit}</div>
+                        <div style={{ color: point.profitPercent >= 0 ? "green" : "red" }}>
+                          ({point.profitPercent >= 0 ? "+" : ""}
+                          {point.profitPercent}%)
+                        </div>
+                      </div>
+                    );
                   }}
                 />
                 <Line
