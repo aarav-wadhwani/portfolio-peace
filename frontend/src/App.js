@@ -288,7 +288,7 @@ export default function App() {
           investMap[date] = cumulative;
         });
 
-        const daysMap = { "1d": 1, "5d": 5, "1m": 30, "1y": 365, "5y": 1825, all: Infinity };
+        const daysMap = { "1d": 1, "5d": 5, "1m": 30, "6m": 183, "1y": 365, "5y": 1825, all: Infinity };
         const maxDays = daysMap[timeline] ?? Infinity;
 
         const keptDates =
@@ -426,41 +426,54 @@ export default function App() {
           )}
         </div>
 
-        {/* Select-All control */}
+        {/* top controls  */}
         {holdings.length > 0 && (
-          <div style={{ margin: "0 0 1rem 0", display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <input
-              type="checkbox"
-              checked={selectedIds.length === holdings.length}
-              onChange={toggleSelectAll}
-            />
-            <span style={{ fontSize: ".9rem" }}>
-              {selectedIds.length === holdings.length ? "Deselect all" : "Select all"}
-            </span>
+          <div
+            style={{
+              marginBottom: "1rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap", // ensures it wraps nicely on small screens
+              gap: ".5rem",
+            }}
+          >
+            {/* Select-All Control */}
+            <label style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+              <input
+                type="checkbox"
+                checked={selectedIds.length === holdings.length}
+                onChange={toggleSelectAll}
+              />
+              <span style={{ fontSize: ".9rem" }}>
+                {selectedIds.length === holdings.length ? "Deselect all" : "Select all"}
+              </span>
+            </label>
+
+            {/* Chart Timeline Dropdown */}
+            {chartData.length > 0 && (
+              <select
+                value={timeline}
+                onChange={(e) => setTimeline(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  fontSize: ".9rem",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                }}
+              >
+                <option value="1d">1 Day</option>
+                <option value="5d">5 Days</option>
+                <option value="1m">1 Month</option>
+                <option value="6m">6 Months</option>
+                <option value="1y">1 Year</option>
+                <option value="5y">5 Years</option>
+                <option value="all">All-time</option>
+              </select>
+            )}
           </div>
         )}
-        {/* Chart timeline*/}
-        {chartData.length > 0 && (
-          <div style={{ marginBottom: ".8rem" }}>
-            <select
-              value={timeline}
-              onChange={(e) => setTimeline(e.target.value)}
-              style={{
-                padding: "6px 10px",
-                fontSize: ".9rem",
-                border: "1px solid #ccc",
-                borderRadius: "6px",
-              }}
-            >
-              <option value="1d">1 Day</option>
-              <option value="5d">5 Days</option>
-              <option value="1m">1 Month</option>
-              <option value="1y">1 Year</option>
-              <option value="5y">5 Years</option>
-              <option value="all">All-time</option>
-            </select>
-          </div>
-        )}
+
 
         {/* Chart */}
         {chartData.length > 0 && (
