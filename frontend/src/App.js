@@ -61,7 +61,6 @@ export default function App() {
         shares: Number(d.shares),
         purchasePrice: Number(d.purchase_price),
         currentPrice: Number(d.current_price),
-        yesterdayClose: Number(d.yesterday_close ?? 0), // add this in DB or set 0
       }));
       setHoldings(formatted);
     };
@@ -118,8 +117,7 @@ export default function App() {
           shares,
           purchase_price: purchasePrice,
           current_price: livePrice,
-          purchase_date: purchaseDate,
-          yesterday_close: yesterdayClose,
+          purchase_date: purchaseDate, 
         })
         .select()
         .single();
@@ -355,7 +353,6 @@ export default function App() {
             purchasePrice: Number(d.purchase_price),
             currentPrice: Number(d.current_price),
             purchaseDate: d.purchase_date,
-            yesterdayClose: Number(d.yesterday_close ?? 0),
           }))
         );
       } else {
