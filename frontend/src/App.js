@@ -275,17 +275,6 @@ export default function App() {
           });
         });
 
-        const investMap = {};
-        let cumulative = 0;
-        sortedDates.forEach((date) => {
-          filteredHoldings.forEach((h) => {
-            if (h.purchaseDate === date) {
-              cumulative += h.purchasePrice * h.shares;
-            }
-          });
-          investMap[date] = cumulative;
-        });
-
         // timeline → number of days (Infinity == all-time)
         const daysMap = { "1d": 1, "5d": 5, "1m": 30, "1y": 365, "5y": 1825, all: Infinity };
         const maxDays = daysMap[timeline] ?? Infinity;
@@ -298,6 +287,16 @@ export default function App() {
           sortedDates = sortedDates.filter((d) => d >= cutoffISO);
         }
 
+        const investMap = {};
+        let cumulative = 0;
+        sortedDates.forEach((date) => {
+          filteredHoldings.forEach((h) => {
+            if (h.purchaseDate === date) {
+              cumulative += h.purchasePrice * h.shares;
+            }
+          });
+          investMap[date] = cumulative;
+        });
 
         const downsampleRate = Math.ceil(sortedDates.length / 100);
 
