@@ -373,8 +373,13 @@ export default function App() {
   const displayed = holdings
     .filter((h) => h.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      if (!sortKey) return 0;
+      if (!sortKey) {
+        return dir * a.ticker.localeCompare(b.ticker);  // ✅ Alphabetical sort;
+      }
       const dir = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "ticker") {
+        return dir * a.ticker.localeCompare(b.ticker);  // ✅ Alphabetical sort
+      }
       let va, vb;
       if (sortKey === "pl") {
         va = (a.currentPrice - a.purchasePrice) * a.shares;
@@ -573,35 +578,32 @@ export default function App() {
         )}
 
         {/* Search & Sort controls */}
-        <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+        <div className="search-sort-controls">
           <input
             type="text"
-            placeholder="Search ticker…"
+            className="search-input"
+            placeholder="🔍 Search ticker…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ flex: 1, padding: "6px 8px" }}
           />
 
           <select
+            className="sort-select"
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value)}
-            style={{ padding: "6px 8px" }}
           >
             <option value="">Sort by…</option>
+            <option value="ticker">Alphabetical (A–Z)</option>
             <option value="pl">Profit/Loss ₹</option>
             <option value="plPct">Profit/Loss %</option>
             <option value="chgPct">Price Change % (1d)</option>
           </select>
 
-          <button
-            onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}
-            style={{ padding: "6px 10px" }}
-          >
+          <button className="sort-dir-button" onClick={() => setSortDir(sortDir === "asc" ? "desc" : "asc")}>
             {sortDir === "asc" ? "↑" : "↓"}
           </button>
         </div>
-
-
+        
         {/* Holdings List */}
         <div className="holdings">
           {displayed.map((h) => {
