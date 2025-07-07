@@ -319,8 +319,8 @@ export default function App() {
             : bVal.localeCompare(aVal);
         
         case "ltp":
-          aVal = a.dailyChangePct ?? getDailyChange(a);
-          bVal = b.dailyChangePct ?? getDailyChange(b);
+          aVal = getDailyChange(a);
+          bVal = getDailyChange(b);
           break;
         
         case "shares":
