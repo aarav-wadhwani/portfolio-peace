@@ -435,7 +435,7 @@ export default function App() {
           }}
           title="Toggle dark mode"
         >
-          {theme === "light" ? "🌙" : "☀️"}
+          {theme === "light" ? "☾" : "☼"}
         </button>
       </header>
 

@@ -109,6 +109,7 @@ input:focus, select:focus {
   font-size: 3rem;
   font-weight: bold;
   margin: 0.5rem 0;
+  color: var(--text-main);
 }
 
 .profit {
@@ -258,6 +259,7 @@ input:focus, select:focus {
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .positive {
@@ -445,7 +447,7 @@ input:focus, select:focus {
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid #ccc;
-  background-color: #fff;
+  background-color: var(--bg);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -456,7 +458,7 @@ input:focus, select:focus {
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid #ccc;
-  background-color: #fff;
+  background-color: var(--bg);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -468,7 +470,8 @@ input:focus, select:focus {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   flex: 0 0 40px;
   cursor: pointer;
-  background-color: #f9f9f9;
+  background-color: var(--bg);
+  color: var(--text-main);
 }
 
 .search-input:focus,
@@ -483,11 +486,6 @@ input:focus, select:focus {
   min-width: 180px;
 }
 
-.sort-dir-button {
-  cursor: pointer;
-  background-color: #f9f9f9;
-}
-
 .sort-dir-button:hover {
-  background-color: #f1f1f1;
+  background-color: var(--card-bg);
 }
