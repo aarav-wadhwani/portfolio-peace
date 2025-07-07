@@ -477,6 +477,14 @@ body {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+.form-group input:invalid:not(:placeholder-shown) {
+  border-color: var(--negative);
+}
+
+.form-group input:valid:not(:placeholder-shown) {
+  border-color: var(--positive);
+}
+
 .form-actions {
   display: flex;
   gap: 1rem;
@@ -503,6 +511,18 @@ body {
   background: var(--accent-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary:disabled:hover {
+  background: var(--accent);
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-secondary {
@@ -545,40 +565,177 @@ body {
 
 /* Auth Styles */
 .auth-container {
-  min-height: 100vh;
+  min-height: calc(100vh - 80px);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 2rem;
   background: var(--bg);
 }
 
 .auth-box {
   background: var(--card-bg);
-  padding: 2.5rem;
+  padding: 3rem;
   border-radius: 16px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
-  width: 90%;
-  max-width: 400px;
+  width: 100%;
+  max-width: 420px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.auth-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+}
+
+.auth-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  color: var(--accent);
 }
 
 .auth-box h2 {
-  margin: 0 0 2rem;
-  font-size: 1.5rem;
-  font-weight: 600;
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
   text-align: center;
+  color: var(--text-main);
+  letter-spacing: -0.025em;
+}
+
+.auth-subtitle {
+  text-align: center;
+  color: var(--text-sub);
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+
+.auth-form {
+  width: 100%;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-sub);
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.password-toggle:hover {
   color: var(--text-main);
 }
 
-.auth-error {
-  color: var(--negative);
+.form-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
   font-size: 0.875rem;
-  margin-bottom: 1rem;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.875rem;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.auth-message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-message span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.auth-success {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--positive);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.auth-success span {
+  background: var(--positive);
+  color: white;
+}
+
+.auth-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--negative);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.auth-error span {
+  background: var(--negative);
+  color: white;
+}
+
+.auth-divider {
   text-align: center;
+  margin: 2rem 0 1.5rem;
+  position: relative;
+}
+
+.auth-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-divider span {
+  background: var(--card-bg);
+  padding: 0 1rem;
+  position: relative;
+  color: var(--text-sub);
+  font-size: 0.875rem;
 }
 
 .auth-toggle {
-  margin-top: 1.5rem;
+  margin: 0;
   text-align: center;
   font-size: 0.875rem;
   color: var(--text-sub);
@@ -588,10 +745,34 @@ body {
   color: var(--accent);
   cursor: pointer;
   font-weight: 500;
+  transition: opacity 0.2s ease;
 }
 
 .auth-toggle span:hover {
+  opacity: 0.8;
   text-decoration: underline;
+}
+
+.auth-footer {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.auth-footer p {
+  font-size: 0.75rem;
+  color: var(--text-sub);
+  margin: 0;
+}
+
+/* Auth Responsive */
+@media (max-width: 640px) {
+  .auth-box {
+    padding: 2rem;
+  }
+  
+  .auth-box h2 {
+    font-size: 1.5rem;
+  }
 }
 
 /* Search and Controls */
