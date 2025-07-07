@@ -91,21 +91,43 @@ export default function App() {
         .order("created_at", { ascending: false });
 
       if (!error) {
-        setHoldings(
-          data.map((d) => ({
-            id: d.id,
-            ticker: d.ticker,
-            shares: Number(d.shares),
-            purchasePrice: Number(d.purchase_price),
-            currentPrice: Number(d.current_price),
-            purchaseDate: d.purchase_date,
-          }))
+        // Enrich each holding with daily change % from the backend
+        const enriched = await Promise.all(
+          data.map(async (d) => {
+            try {
+              const res = await fetch(`${API_BASE}/api/price/${d.ticker}`);
+              if (!res.ok) throw new Error();
+              const { price, daily_change_pct } = await res.json();
+              return {
+                id: d.id,
+                ticker: d.ticker,
+                shares: Number(d.shares),
+                purchasePrice: Number(d.purchase_price),
+                currentPrice: Number(price),
+                purchaseDate: d.purchase_date,
+                dailyChangePct: Number(daily_change_pct ?? 0),
+              };
+            } catch {
+              return {
+                id: d.id,
+                ticker: d.ticker,
+                shares: Number(d.shares),
+                purchasePrice: Number(d.purchase_price),
+                currentPrice: Number(d.current_price),
+                purchaseDate: d.purchase_date,
+                dailyChangePct: 0, // fallback
+              };
+            }
+          })
         );
+
+        setHoldings(enriched);
       }
     };
 
     loadHoldings();
   }, [user]);
+
 
   // ─── Helper Functions ───────────────────────────────────────────
   async function fetchLivePrice(ticker) {
@@ -304,6 +326,12 @@ export default function App() {
     cancelEdit();
   };
 
+  // ─── Daily-% helper (uses value delivered by the backend) ───────────
+  function getDailyChange(h) {
+    // If the API return failed, gracefully fall back to 0
+    return h.dailyChangePct ?? 0;
+  }
+
   // ─── Filtered and Sorted Holdings ──────────────────────────────
   const displayedHoldings = holdings
     .filter((h) => h.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -350,15 +378,6 @@ export default function App() {
       setSortBy(column);
       setSortOrder("asc");
     }
-  };
-
-  // Helper to calculate daily change percentage (mock for now)
-  const getDailyChange = (holding) => {
-    // This would ideally come from API data comparing with yesterday's close
-    // For now, using a random mock value between -5% and +5%
-    const seed = holding.ticker.charCodeAt(0) + holding.ticker.charCodeAt(1);
-    const mockChange = ((seed % 100) - 50) / 10;
-    return mockChange;
   };
 
   if (authLoading) return null;
