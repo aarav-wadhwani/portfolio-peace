@@ -61,10 +61,14 @@ def set_cache(ticker: str, price: float):
 # ────────────────────────────────────────────────────────────────────
 # yfinance fetch (history ➜ fast_info)
 # ────────────────────────────────────────────────────────────────────
-def fetch_price_yf(ticker: str) -> float | None:
+def fetch_price_yf(ticker: str) -> dict | None:
     ticker = ticker.strip().upper()
     if cached := get_cached(ticker):
-        return cached
+        return {
+            "price": cached,
+            "previous_close": None,
+            "daily_change_pct": None
+        }
 
     yf_symbol = f"{ticker}.NS"
     stock = yf.Ticker(yf_symbol)
@@ -72,25 +76,50 @@ def fetch_price_yf(ticker: str) -> float | None:
     # 1) history (most reliable)
     try:
         hist = stock.history(period="2d")
-        if not hist.empty:
-            price = float(hist["Close"].iloc[-1])
-            set_cache(ticker, price)
-            return price
+        if not hist.empty and len(hist) >= 2:
+            current_price = float(hist["Close"].iloc[-1])
+            previous_close = float(hist["Close"].iloc[-2])
+            daily_change_pct = ((current_price - previous_close) / previous_close) * 100
+
+            set_cache(ticker, current_price)
+            return {
+                "price": round(current_price, 2),
+                "previous_close": round(previous_close, 2),
+                "daily_change_pct": round(daily_change_pct, 2)
+            }
     except Exception as e:
         print(f"[YF] history() failed for {ticker}: {e}")
 
     # 2) fast_info fallback
     try:
         info = stock.fast_info
-        price = info.get("last_price") or info.get("previous_close")
-        if price:
-            set_cache(ticker, float(price))
-            return float(price)
+        current_price = info.get("last_price")
+        previous_close = info.get("previous_close")
+
+        if current_price:
+            set_cache(ticker, float(current_price))
+
+        if current_price and previous_close:
+            daily_change_pct = ((current_price - previous_close) / previous_close) * 100
+            return {
+                "price": round(current_price, 2),
+                "previous_close": round(previous_close, 2),
+                "daily_change_pct": round(daily_change_pct, 2)
+            }
+
+        if current_price:
+            return {
+                "price": round(current_price, 2),
+                "previous_close": None,
+                "daily_change_pct": None
+            }
+
     except Exception as e:
         print(f"[YF] fast_info failed for {ticker}: {e}")
 
     print(f"[YF] No price for {ticker}")
     return None
+
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -179,8 +208,11 @@ app.add_middleware(
 class StockPrice(BaseModel):
     ticker: str
     price: float
+    previous_close: float | None = None
+    daily_change_pct: float | None = None
     currency: str = "INR"
     exchange: str = "NSE"
+
 
 class PricePoint(BaseModel):
     date: str   # YYYY-MM-DD
@@ -221,14 +253,20 @@ def get_history(
 
 @app.get("/api/price/{ticker}", response_model=StockPrice)
 def get_price(ticker: str):
-    price = fetch_price_yf(ticker)
-    if price is None:
+    data = fetch_price_yf(ticker)
+    if data is None:
         raise HTTPException(
             status_code=404,
             detail=f"Could not retrieve price for '{ticker.upper()}'. "
                    f"Is the symbol correct and listed on NSE?",
         )
-    return StockPrice(ticker=ticker.upper(), price=round(price, 2))
+
+    return StockPrice(
+        ticker=ticker.upper(),
+        price=round(data["price"], 2),
+        previous_close=data.get("previous_close"),
+        daily_change_pct=data.get("daily_change_pct"),
+    )
 
 @app.post("/api/prices")
 def get_prices(tickers: List[str]):

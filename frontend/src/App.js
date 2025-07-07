@@ -111,8 +111,7 @@ export default function App() {
   async function fetchLivePrice(ticker) {
     const res = await fetch(`${API_BASE}/api/price/${ticker}`);
     if (!res.ok) throw new Error("Ticker not found on server");
-    const data = await res.json();
-    return data.price;
+    return await res.json(); // return full object: { price, daily_change_pct, ... }
   }
 
   // ─── Portfolio Calculations ─────────────────────────────────────
@@ -221,7 +220,7 @@ export default function App() {
     }
 
     try {
-      const livePrice = await fetchLivePrice(ticker);
+      const { price: livePrice, daily_change_pct } = await fetchLivePrice(ticker);
 
       const { data, error } = await supabase
         .from("holdings")
@@ -244,6 +243,7 @@ export default function App() {
         purchasePrice: Number(data.purchase_price),
         currentPrice: Number(data.current_price),
         purchaseDate: data.purchase_date,
+        dailyChangePct: daily_change_pct,  // add this line
       };
 
       setHoldings((prev) => [newHolding, ...prev]);
@@ -319,8 +319,8 @@ export default function App() {
             : bVal.localeCompare(aVal);
         
         case "ltp":
-          aVal = a.currentPrice;
-          bVal = b.currentPrice;
+          aVal = a.dailyChangePct ?? getDailyChange(a);
+          bVal = b.dailyChangePct ?? getDailyChange(b);
           break;
         
         case "shares":
@@ -507,7 +507,7 @@ export default function App() {
                     {displayedHoldings.map((h) => {
                       const profit = (h.currentPrice - h.purchasePrice) * h.shares;
                       const profitPct = ((h.currentPrice - h.purchasePrice) / h.purchasePrice) * 100;
-                      const dailyChange = getDailyChange(h);
+                      const dailyChange = h.dailyChangePct ?? getDailyChange(h);
                       
                       if (editingId === h.id) {
                         return (
