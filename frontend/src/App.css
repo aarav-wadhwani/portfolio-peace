@@ -131,6 +131,8 @@ body {
 .summary-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .summary-label {
@@ -224,6 +226,9 @@ body {
   border-radius: 16px;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  max-height: 500px;
 }
 
 .holdings-header {
@@ -231,6 +236,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
+  gap: 1rem;
 }
 
 .holdings-header h3 {
@@ -238,6 +244,30 @@ body {
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-main);
+}
+
+.holdings-table-wrapper {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Scrollbar styling for holdings table */
+.holdings-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.holdings-table-wrapper::-webkit-scrollbar-track {
+  background: var(--bg);
+  border-radius: 3px;
+}
+
+.holdings-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.holdings-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--text-sub);
 }
 
 .holdings-table {
@@ -254,6 +284,23 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+  position: sticky;
+  top: 0;
+  background: var(--card-bg);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.holdings-table th:hover {
+  color: var(--accent);
+}
+
+.holdings-table th:nth-child(2),
+.holdings-table th:nth-child(3) {
+  text-align: center;
 }
 
 .holdings-table th:last-child {
@@ -275,8 +322,31 @@ body {
   color: var(--text-main);
 }
 
-.company-cell {
-  color: var(--text-sub);
+.ltp-cell {
+  text-align: center;
+}
+
+.ltp-value {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.ltp-change {
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.ltp-change.positive {
+  color: var(--positive);
+}
+
+.ltp-change.negative {
+  color: var(--negative);
+}
+
+.shares-cell {
+  text-align: center;
+  color: var(--text-main);
 }
 
 .profit-cell {
@@ -558,6 +628,10 @@ body {
   .summary-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  
+  .holdings-section {
+    max-height: 400px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -581,6 +655,10 @@ body {
   .add-button {
     bottom: 1rem;
     right: 1rem;
+  }
+  
+  .holdings-section {
+    max-height: 350px;
   }
 }
 
@@ -650,7 +728,25 @@ body {
   background: var(--bg);
 }
 
-/* Loading and Empty States */
+.action-buttons {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.action-buttons button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-sub);
+  padding: 4px;
+  transition: color 0.2s ease;
+}
+
+.action-buttons button:hover {
+  color: var(--text-main);
+}
 .empty-state {
   text-align: center;
   padding: 3rem;

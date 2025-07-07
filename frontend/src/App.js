@@ -49,6 +49,8 @@ export default function App() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ shares: "", purchasePrice: "" });
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("ticker"); // Default sort by ticker
+  const [sortOrder, setSortOrder] = useState("asc"); // Default ascending
   const [timeline, setTimeline] = useState("1y");
   const [theme, setTheme] = useState(
     localStorage.getItem("theme") || 
@@ -194,11 +196,13 @@ export default function App() {
   }, [holdings, timeline]);
 
   // ─── Asset Allocation Data ──────────────────────────────────────
-  const allocationData = holdings.map((h, index) => ({
-    name: h.ticker,
-    value: h.currentPrice * h.shares,
-    percentage: ((h.currentPrice * h.shares) / totalValue * 100).toFixed(1),
-  }));
+  const allocationData = holdings
+    .map((h, index) => ({
+      name: h.ticker,
+      value: h.currentPrice * h.shares,
+      percentage: ((h.currentPrice * h.shares) / totalValue * 100).toFixed(1),
+    }))
+    .sort((a, b) => b.value - a.value); // Sort from largest to smallest
 
   // ─── Add Holding ────────────────────────────────────────────────
   async function handleSubmit() {
@@ -300,10 +304,62 @@ export default function App() {
     cancelEdit();
   };
 
-  // ─── Filtered Holdings ──────────────────────────────────────────
-  const displayedHoldings = holdings.filter((h) =>
-    h.ticker.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // ─── Filtered and Sorted Holdings ──────────────────────────────
+  const displayedHoldings = holdings
+    .filter((h) => h.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (sortBy) {
+        case "ticker":
+          aVal = a.ticker;
+          bVal = b.ticker;
+          return sortOrder === "asc" 
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal);
+        
+        case "ltp":
+          aVal = a.currentPrice;
+          bVal = b.currentPrice;
+          break;
+        
+        case "shares":
+          aVal = a.shares;
+          bVal = b.shares;
+          break;
+        
+        case "profit":
+          aVal = (a.currentPrice - a.purchasePrice) * a.shares;
+          bVal = (b.currentPrice - b.purchasePrice) * b.shares;
+          break;
+        
+        default:
+          return 0;
+      }
+      
+      if (sortBy !== "ticker") {
+        return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
+      }
+    });
+
+  // Helper to handle column click for sorting
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(column);
+      setSortOrder("asc");
+    }
+  };
+
+  // Helper to calculate daily change percentage (mock for now)
+  const getDailyChange = (holding) => {
+    // This would ideally come from API data comparing with yesterday's close
+    // For now, using a random mock value between -5% and +5%
+    const seed = holding.ticker.charCodeAt(0) + holding.ticker.charCodeAt(1);
+    const mockChange = ((seed % 100) - 50) / 10;
+    return mockChange;
+  };
 
   if (authLoading) return null;
   if (!user) return <Auth />;
@@ -428,96 +484,96 @@ export default function App() {
               />
             </div>
             
-            {displayedHoldings.length > 0 ? (
-              <table className="holdings-table">
-                <thead>
-                  <tr>
-                    <th>Ticker</th>
-                    <th>Company</th>
-                    <th>Profit/Loss</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayedHoldings.map((h) => {
-                    const profit = (h.currentPrice - h.purchasePrice) * h.shares;
-                    const profitPct = ((h.currentPrice - h.purchasePrice) / h.purchasePrice) * 100;
-                    
-                    if (editingId === h.id) {
-                      return (
-                        <tr key={h.id} className="edit-row">
-                          <td colSpan="3">
-                            <div className="edit-inputs">
-                              <input
-                                type="number"
-                                placeholder="Shares"
-                                value={editForm.shares}
-                                onChange={(e) => setEditForm({ ...editForm, shares: e.target.value })}
-                              />
-                              <input
-                                type="number"
-                                placeholder="Purchase Price"
-                                value={editForm.purchasePrice}
-                                onChange={(e) => setEditForm({ ...editForm, purchasePrice: e.target.value })}
-                              />
-                              <div className="edit-actions">
-                                <button className="save-btn" onClick={() => saveEdit(h.id)}>Save</button>
-                                <button className="cancel-btn" onClick={cancelEdit}>Cancel</button>
+            <div className="holdings-table-wrapper">
+              {displayedHoldings.length > 0 ? (
+                <table className="holdings-table">
+                  <thead>
+                    <tr>
+                      <th onClick={() => handleSort("ticker")}>
+                        Ticker {sortBy === "ticker" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                      </th>
+                      <th onClick={() => handleSort("ltp")} style={{ textAlign: "center" }}>
+                        LTP {sortBy === "ltp" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                      </th>
+                      <th onClick={() => handleSort("shares")} style={{ textAlign: "center" }}>
+                        Shares {sortBy === "shares" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                      </th>
+                      <th onClick={() => handleSort("profit")} style={{ textAlign: "right" }}>
+                        Profit/Loss {sortBy === "profit" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedHoldings.map((h) => {
+                      const profit = (h.currentPrice - h.purchasePrice) * h.shares;
+                      const profitPct = ((h.currentPrice - h.purchasePrice) / h.purchasePrice) * 100;
+                      const dailyChange = getDailyChange(h);
+                      
+                      if (editingId === h.id) {
+                        return (
+                          <tr key={h.id} className="edit-row">
+                            <td colSpan="4">
+                              <div className="edit-inputs">
+                                <input
+                                  type="number"
+                                  placeholder="Shares"
+                                  value={editForm.shares}
+                                  onChange={(e) => setEditForm({ ...editForm, shares: e.target.value })}
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Purchase Price"
+                                  value={editForm.purchasePrice}
+                                  onChange={(e) => setEditForm({ ...editForm, purchasePrice: e.target.value })}
+                                />
+                                <div className="edit-actions">
+                                  <button className="save-btn" onClick={() => saveEdit(h.id)}>Save</button>
+                                  <button className="cancel-btn" onClick={cancelEdit}>Cancel</button>
+                                </div>
                               </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+                      
+                      return (
+                        <tr key={h.id}>
+                          <td className="ticker-cell">{h.ticker}</td>
+                          <td className="ltp-cell">
+                            <div className="ltp-value">₹{h.currentPrice.toFixed(2)}</div>
+                            <div className={`ltp-change ${dailyChange >= 0 ? "positive" : "negative"}`}>
+                              {dailyChange >= 0 ? "+" : ""}{dailyChange.toFixed(1)}%
+                            </div>
+                          </td>
+                          <td className="shares-cell">{h.shares}</td>
+                          <td className={`profit-cell ${profit >= 0 ? "positive" : "negative"}`}>
+                            {profit >= 0 ? "+" : ""}₹{Math.abs(profit).toFixed(0)}
+                            <span className="arrow">
+                              {profit >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                            </span>
+                            <div style={{ fontSize: "0.75rem", opacity: 0.8 }}>
+                              ({profitPct >= 0 ? "+" : ""}{profitPct.toFixed(1)}%)
+                            </div>
+                            <div className="action-buttons">
+                              <button onClick={() => startEdit(h)}>
+                                <Edit2 size={14} />
+                              </button>
+                              <button onClick={() => deleteHolding(h.id)}>
+                                <Trash2 size={14} />
+                              </button>
                             </div>
                           </td>
                         </tr>
                       );
-                    }
-                    
-                    return (
-                      <tr key={h.id}>
-                        <td className="ticker-cell">{h.ticker}</td>
-                        <td className="company-cell">{h.ticker}</td>
-                        <td className={`profit-cell ${profit >= 0 ? "positive" : "negative"}`}>
-                          {profit >= 0 ? "+" : ""}₹{Math.abs(profit).toFixed(0)}
-                          <span className="arrow">
-                            {profit >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                          </span>
-                          <div style={{ fontSize: "0.75rem", opacity: 0.8 }}>
-                            ({profitPct >= 0 ? "+" : ""}{profitPct.toFixed(1)}%)
-                          </div>
-                          <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem" }}>
-                            <button
-                              onClick={() => startEdit(h)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                color: "var(--text-sub)",
-                                padding: "4px",
-                              }}
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={() => deleteHolding(h.id)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                color: "var(--text-sub)",
-                                padding: "4px",
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <div className="empty-state">
-                <p>No holdings found</p>
-              </div>
-            )}
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="empty-state">
+                  <p>No holdings found</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
