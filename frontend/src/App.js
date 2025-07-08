@@ -23,6 +23,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  ReferenceLine,
 } from "recharts";
 import { supabase } from "./supabaseClient";
 import { tickerList } from "./tickers";
@@ -52,6 +53,8 @@ export default function App() {
   const [sortBy, setSortBy] = useState("ticker"); // Default sort by ticker
   const [sortOrder, setSortOrder] = useState("asc"); // Default ascending
   const [timeline, setTimeline] = useState("1y");
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [chartType, setChartType] = useState("value"); // "value" or "profit"
   const [theme, setTheme] = useState(
     localStorage.getItem("theme") || 
     (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
@@ -91,49 +94,28 @@ export default function App() {
         .order("created_at", { ascending: false });
 
       if (!error) {
-        // Enrich each holding with daily change % from the backend
-        const enriched = await Promise.all(
-          data.map(async (d) => {
-            try {
-              const res = await fetch(`${API_BASE}/api/price/${d.ticker}`);
-              if (!res.ok) throw new Error();
-              const { price, daily_change_pct } = await res.json();
-              return {
-                id: d.id,
-                ticker: d.ticker,
-                shares: Number(d.shares),
-                purchasePrice: Number(d.purchase_price),
-                currentPrice: Number(price),
-                purchaseDate: d.purchase_date,
-                dailyChangePct: Number(daily_change_pct ?? 0),
-              };
-            } catch {
-              return {
-                id: d.id,
-                ticker: d.ticker,
-                shares: Number(d.shares),
-                purchasePrice: Number(d.purchase_price),
-                currentPrice: Number(d.current_price),
-                purchaseDate: d.purchase_date,
-                dailyChangePct: 0, // fallback
-              };
-            }
-          })
+        setHoldings(
+          data.map((d) => ({
+            id: d.id,
+            ticker: d.ticker,
+            shares: Number(d.shares),
+            purchasePrice: Number(d.purchase_price),
+            currentPrice: Number(d.current_price),
+            purchaseDate: d.purchase_date,
+          }))
         );
-
-        setHoldings(enriched);
       }
     };
 
     loadHoldings();
   }, [user]);
 
-
   // ─── Helper Functions ───────────────────────────────────────────
   async function fetchLivePrice(ticker) {
     const res = await fetch(`${API_BASE}/api/price/${ticker}`);
     if (!res.ok) throw new Error("Ticker not found on server");
-    return await res.json(); // return full object: { price, daily_change_pct, ... }
+    const data = await res.json();
+    return data.price;
   }
 
   // ─── Portfolio Calculations ─────────────────────────────────────
@@ -148,6 +130,17 @@ export default function App() {
   const totalProfit = totalValue - totalInvested;
   const profitPercent = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
+  // Calculate today's profit/loss
+  const todaysProfit = holdings.reduce((sum, h) => {
+    const holdingValue = h.currentPrice * h.shares;
+    const dailyChange = (h.dailyChangePct || 0) / 100;
+    const todaysGain = holdingValue * dailyChange / (1 + dailyChange);
+    return sum + todaysGain;
+  }, 0);
+  
+  const yesterdayValue = totalValue - todaysProfit;
+  const todaysProfitPercent = yesterdayValue > 0 ? (todaysProfit / yesterdayValue) * 100 : 0;
+
   // Get earliest investment date
   const earliestDate = holdings.length > 0
     ? holdings.reduce((earliest, h) => {
@@ -158,7 +151,9 @@ export default function App() {
 
   // ─── Chart Data ─────────────────────────────────────────────────
   useEffect(() => {
-    if (!holdings.length) {
+    const filteredHoldings = holdings.filter(h => selectedIds.includes(h.id));
+    
+    if (!filteredHoldings.length) {
       setChartData([]);
       return;
     }
@@ -166,23 +161,40 @@ export default function App() {
     const buildChart = async () => {
       try {
         const histories = await Promise.all(
-          holdings.map(async (h) => {
+          filteredHoldings.map(async (h) => {
             const start = h.purchaseDate || new Date(Date.now() - 365 * 864e5).toISOString().split("T")[0];
             const res = await fetch(`${API_BASE}/api/history/${h.ticker}?start=${start}`);
             if (!res.ok) throw new Error(`Failed to fetch history for ${h.ticker}`);
-            return res.json();
+            return { holding: h, data: await res.json() };
           })
         );
 
         const valueMap = {};
-        histories.forEach((hist, i) => {
-          const { shares } = holdings[i];
-          hist.series.forEach((pt) => {
+        const investedMap = {};
+        
+        // Build value map
+        histories.forEach(({ holding, data }) => {
+          const { shares } = holding;
+          data.series.forEach((pt) => {
             valueMap[pt.date] = (valueMap[pt.date] || 0) + pt.close * shares;
           });
         });
 
+        // Build invested map (cumulative investment over time)
         const sortedDates = Object.keys(valueMap).sort();
+        const investedByDate = {};
+        
+        // For each date, calculate total invested up to that point
+        sortedDates.forEach((date) => {
+          let totalInvestedToDate = 0;
+          filteredHoldings.forEach((h) => {
+            if (h.purchaseDate && h.purchaseDate <= date) {
+              totalInvestedToDate += h.purchasePrice * h.shares;
+            }
+          });
+          investedByDate[date] = totalInvestedToDate;
+        });
+
         const daysMap = { "1d": 1, "5d": 5, "1m": 30, "6m": 183, "1y": 365, "5y": 1825, all: Infinity };
         const maxDays = daysMap[timeline] ?? Infinity;
 
@@ -197,12 +209,16 @@ export default function App() {
           .filter((_, idx) => idx % downsampleRate === 0)
           .map((date) => {
             const value = valueMap[date];
+            const invested = investedByDate[date] || 0;
+            const profit = value - invested;
+            
             return {
               date: new Date(date).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
               }),
               value: Number(value.toFixed(2)),
+              profit: Number(profit.toFixed(2)),
             };
           });
 
@@ -214,14 +230,22 @@ export default function App() {
     };
 
     buildChart();
-  }, [holdings, timeline]);
+  }, [holdings, timeline, selectedIds]);
 
   // ─── Asset Allocation Data ──────────────────────────────────────
-  const allocationData = holdings
+  const selectedHoldings = holdings.filter(h => selectedIds.includes(h.id));
+  const selectedTotalValue = selectedHoldings.reduce(
+    (sum, h) => sum + h.currentPrice * h.shares,
+    0
+  );
+  
+  const allocationData = selectedHoldings
     .map((h, index) => ({
       name: h.ticker,
       value: h.currentPrice * h.shares,
-      percentage: ((h.currentPrice * h.shares) / totalValue * 100).toFixed(1),
+      percentage: selectedTotalValue > 0 
+        ? ((h.currentPrice * h.shares) / selectedTotalValue * 100).toFixed(1)
+        : "0",
     }))
     .sort((a, b) => b.value - a.value); // Sort from largest to smallest
 
@@ -242,7 +266,7 @@ export default function App() {
     }
 
     try {
-      const { price: livePrice, daily_change_pct } = await fetchLivePrice(ticker);
+      const livePrice = await fetchLivePrice(ticker);
 
       const { data, error } = await supabase
         .from("holdings")
@@ -265,10 +289,10 @@ export default function App() {
         purchasePrice: Number(data.purchase_price),
         currentPrice: Number(data.current_price),
         purchaseDate: data.purchase_date,
-        dailyChangePct: daily_change_pct,  // add this line
       };
 
       setHoldings((prev) => [newHolding, ...prev]);
+      setSelectedIds((prev) => [data.id, ...prev]); // Add new holding to selected
       setFormData(emptyForm);
       setShowForm(false);
     } catch (err) {
@@ -281,6 +305,7 @@ export default function App() {
   // ─── Delete Holding ─────────────────────────────────────────────
   const deleteHolding = async (id) => {
     setHoldings((prev) => prev.filter((h) => h.id !== id));
+    setSelectedIds((prev) => prev.filter((x) => x !== id)); // Remove from selected
     const { error } = await supabase.from("holdings").delete().eq("id", id);
     if (error) console.error("Delete failed:", error);
   };
@@ -326,12 +351,6 @@ export default function App() {
     cancelEdit();
   };
 
-  // ─── Daily-% helper (uses value delivered by the backend) ───────────
-  function getDailyChange(h) {
-    // If the API return failed, gracefully fall back to 0
-    return h.dailyChangePct ?? 0;
-  }
-
   // ─── Filtered and Sorted Holdings ──────────────────────────────
   const displayedHoldings = holdings
     .filter((h) => h.ticker.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -347,8 +366,8 @@ export default function App() {
             : bVal.localeCompare(aVal);
         
         case "ltp":
-          aVal = getDailyChange(a);
-          bVal = getDailyChange(b);
+          aVal = a.currentPrice;
+          bVal = b.currentPrice;
           break;
         
         case "shares":
@@ -380,6 +399,32 @@ export default function App() {
     }
   };
 
+  // Helper to toggle selection
+  const toggleSelectAll = () => {
+    if (selectedIds.length === holdings.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(holdings.map(h => h.id));
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) 
+        ? prev.filter(x => x !== id)
+        : [...prev, id]
+    );
+  };
+
+  // Helper to calculate daily change percentage (mock for now)
+  const getDailyChange = (holding) => {
+    // This would ideally come from API data comparing with yesterday's close
+    // For now, using a random mock value between -5% and +5%
+    const seed = holding.ticker.charCodeAt(0) + holding.ticker.charCodeAt(1);
+    const mockChange = ((seed % 100) - 50) / 10;
+    return mockChange;
+  };
+
   if (authLoading) return null;
   if (!user) return <Auth />;
 
@@ -403,18 +448,23 @@ export default function App() {
           <div className="summary-card">
             <p className="summary-label">Total Value</p>
             <h2 className="summary-value">₹{totalValue.toFixed(0)}</h2>
+            <div className={`summary-change ${totalProfit >= 0 ? "positive" : "negative"}`}>
+              <span style={{ fontSize: "0.875rem" }}>
+                {totalProfit >= 0 ? "+" : ""}₹{Math.abs(totalProfit).toFixed(0)} ({profitPercent >= 0 ? "+" : ""}{profitPercent.toFixed(1)}%)
+              </span>
+            </div>
           </div>
           
           <div className="summary-card">
             <p className="summary-label">Today's Profit/Loss</p>
             <h2 className="summary-value">
-              <span className={totalProfit >= 0 ? "positive" : "negative"}>
-                {totalProfit >= 0 ? "+" : ""}₹{Math.abs(totalProfit).toFixed(0)}
+              <span className={todaysProfit >= 0 ? "positive" : "negative"}>
+                {todaysProfit >= 0 ? "+" : ""}₹{Math.abs(todaysProfit).toFixed(0)}
               </span>
             </h2>
-            <div className={`summary-change ${totalProfit >= 0 ? "positive" : "negative"}`}>
-              {totalProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>({profitPercent >= 0 ? "+" : ""}{profitPercent.toFixed(1)}%)</span>
+            <div className={`summary-change ${todaysProfit >= 0 ? "positive" : "negative"}`}>
+              {todaysProfit >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+              <span>({todaysProfitPercent >= 0 ? "+" : ""}{todaysProfitPercent.toFixed(1)}%)</span>
             </div>
           </div>
           
@@ -438,21 +488,49 @@ export default function App() {
           {/* Chart Section */}
           <div className="chart-section">
             <div className="chart-header">
-              <h3>Value Over Time</h3>
-              <select
-                className="timeline-select"
-                value={timeline}
-                onChange={(e) => setTimeline(e.target.value)}
-              >
-                <option value="1d">1 Day</option>
-                <option value="5d">5 Days</option>
-                <option value="1m">1 Month</option>
-                <option value="6m">6 Months</option>
-                <option value="1y">1 Year</option>
-                <option value="5y">5 Years</option>
-                <option value="all">All-time</option>
-              </select>
+              <h3>{chartType === "value" ? "Value Over Time" : "Profit/Loss Over Time"}</h3>
+              <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                <button
+                  onClick={() => setChartType(chartType === "value" ? "profit" : "value")}
+                  style={{
+                    padding: "0.5rem 1rem",
+                    fontSize: "0.875rem",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    background: "var(--bg)",
+                    color: "var(--text-main)",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => e.target.style.borderColor = "var(--accent)"}
+                  onMouseLeave={(e) => e.target.style.borderColor = "var(--border)"}
+                  title={`Switch to ${chartType === "value" ? "Profit/Loss" : "Value"} view`}
+                >
+                  {chartType === "value" ? "📊 P/L" : "💰 Value"}
+                </button>
+                <select
+                  className="timeline-select"
+                  value={timeline}
+                  onChange={(e) => setTimeline(e.target.value)}
+                >
+                  <option value="1d">1 Day</option>
+                  <option value="5d">5 Days</option>
+                  <option value="1m">1 Month</option>
+                  <option value="6m">6 Months</option>
+                  <option value="1y">1 Year</option>
+                  <option value="5y">5 Years</option>
+                  <option value="all">All-time</option>
+                </select>
+              </div>
             </div>
+            
+            {selectedIds.length > 0 && (
+              <div style={{ marginBottom: "1rem", fontSize: "0.875rem", color: "var(--text-sub)" }}>
+                {selectedIds.length === holdings.length 
+                  ? "Showing all holdings" 
+                  : `Showing ${selectedIds.length} of ${holdings.length} holdings`}
+              </div>
+            )}
             
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -462,7 +540,13 @@ export default function App() {
                   <YAxis
                     stroke="var(--text-sub)"
                     tick={{ fontSize: 12 }}
-                    tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k`}
+                    tickFormatter={(v) => {
+                      const absValue = Math.abs(v);
+                      if (absValue >= 1000) {
+                        return `${v < 0 ? '-' : ''}₹${(absValue/1000).toFixed(0)}k`;
+                      }
+                      return `${v < 0 ? '-' : ''}₹${absValue.toFixed(0)}`;
+                    }}
                   />
                   <Tooltip
                     contentStyle={{
@@ -470,12 +554,16 @@ export default function App() {
                       border: "1px solid var(--border)",
                       borderRadius: "8px",
                     }}
-                    formatter={(value) => `₹${value.toFixed(2)}`}
+                    formatter={(value) => [`₹${value.toFixed(2)}`, chartType === "value" ? "Value" : "Profit/Loss"]}
                   />
+                  {chartType === "profit" && (
+                    <ReferenceLine y={0} stroke="var(--text-sub)" strokeDasharray="3 3" />
+                  )}
                   <Line
                     type="monotone"
-                    dataKey="value"
-                    stroke="var(--accent)"
+                    dataKey={chartType === "value" ? "value" : "profit"}
+                    stroke={chartType === "value" ? "var(--accent)" : 
+                            (chartData.length > 0 && chartData[chartData.length - 1].profit >= 0) ? "var(--positive)" : "var(--negative)"}
                     strokeWidth={2}
                     dot={false}
                     activeDot={{ r: 5 }}
@@ -493,14 +581,24 @@ export default function App() {
           <div className="holdings-section">
             <div className="holdings-header">
               <h3>Holdings</h3>
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search ticker..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: "200px" }}
-              />
+              <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === holdings.length && holdings.length > 0}
+                    onChange={toggleSelectAll}
+                  />
+                  <span>Select all</span>
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search ticker..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ width: "200px" }}
+                />
+              </div>
             </div>
             
             <div className="holdings-table-wrapper">
@@ -508,6 +606,7 @@ export default function App() {
                 <table className="holdings-table">
                   <thead>
                     <tr>
+                      <th style={{ width: "40px", textAlign: "center" }}></th>
                       <th onClick={() => handleSort("ticker")}>
                         Ticker {sortBy === "ticker" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
                       </th>
@@ -526,12 +625,12 @@ export default function App() {
                     {displayedHoldings.map((h) => {
                       const profit = (h.currentPrice - h.purchasePrice) * h.shares;
                       const profitPct = ((h.currentPrice - h.purchasePrice) / h.purchasePrice) * 100;
-                      const dailyChange = h.dailyChangePct ?? getDailyChange(h);
+                      const dailyChange = getDailyChange(h);
                       
                       if (editingId === h.id) {
                         return (
                           <tr key={h.id} className="edit-row">
-                            <td colSpan="4">
+                            <td colSpan="5">
                               <div className="edit-inputs">
                                 <input
                                   type="number"
@@ -557,11 +656,18 @@ export default function App() {
                       
                       return (
                         <tr key={h.id}>
+                          <td style={{ width: "40px", textAlign: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.includes(h.id)}
+                              onChange={() => toggleSelectOne(h.id)}
+                            />
+                          </td>
                           <td className="ticker-cell">{h.ticker}</td>
                           <td className="ltp-cell">
                             <div className="ltp-value">₹{h.currentPrice.toFixed(2)}</div>
-                            <div className={`ltp-change ${dailyChange >= 0 ? "positive" : "negative"}`}>
-                              {dailyChange >= 0 ? "+" : ""}{dailyChange.toFixed(1)}%
+                            <div className={`ltp-change ${h.dailyChangePct >= 0 ? "positive" : "negative"}`}>
+                              {h.dailyChangePct >= 0 ? "+" : ""}{h.dailyChangePct.toFixed(1)}%
                             </div>
                           </td>
                           <td className="shares-cell">{h.shares}</td>
@@ -597,10 +703,15 @@ export default function App() {
         </div>
 
         {/* Asset Allocation */}
-        {holdings.length > 0 && (
+        {selectedHoldings.length > 0 && (
           <div className="allocation-section">
             <div className="allocation-header">
               <h3>Asset Allocation</h3>
+              {selectedIds.length < holdings.length && (
+                <p style={{ fontSize: "0.875rem", color: "var(--text-sub)", margin: "0.5rem 0 0 0" }}>
+                  Showing {selectedIds.length} of {holdings.length} holdings
+                </p>
+              )}
             </div>
             <div className="allocation-content">
               <ResponsiveContainer width="100%" height={300}>

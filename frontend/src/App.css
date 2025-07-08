@@ -294,7 +294,11 @@ body {
   white-space: nowrap;
 }
 
-.holdings-table th:hover {
+.holdings-table th:first-child {
+  cursor: default;
+}
+
+.holdings-table th:not(:first-child):hover {
   color: var(--accent);
 }
 
