@@ -170,7 +170,6 @@ export default function App() {
         );
 
         const valueMap = {};
-        const investedMap = {};
         
         // Build value map
         histories.forEach(({ holding, data }) => {
@@ -572,7 +571,7 @@ export default function App() {
               </ResponsiveContainer>
             ) : (
               <div className="empty-state">
-                <p>No chart data available</p>
+                <p>{selectedIds.length === 0 ? "No holdings selected" : "No chart data available"}</p>
               </div>
             )}
           </div>
@@ -666,8 +665,8 @@ export default function App() {
                           <td className="ticker-cell">{h.ticker}</td>
                           <td className="ltp-cell">
                             <div className="ltp-value">₹{h.currentPrice.toFixed(2)}</div>
-                            <div className={`ltp-change ${h.dailyChangePct >= 0 ? "positive" : "negative"}`}>
-                              {h.dailyChangePct >= 0 ? "+" : ""}{h.dailyChangePct.toFixed(1)}%
+                            <div className={`ltp-change ${(h.dailyChangePct || 0) >= 0 ? "positive" : "negative"}`}>
+                              {(h.dailyChangePct || 0) >= 0 ? "+" : ""}{(h.dailyChangePct || 0).toFixed(1)}%
                             </div>
                           </td>
                           <td className="shares-cell">{h.shares}</td>
