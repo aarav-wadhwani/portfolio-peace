@@ -45,79 +45,96 @@ POPULAR = {
 }
 
 # ────────────────────────────────────────────────────────────────────
-# Simple in-memory cache  {TICKER: {"price": float, "ts": float}}
+# Enhanced cache with daily change data
 # ────────────────────────────────────────────────────────────────────
-cache: Dict[str, Dict[str, float]] = {}
+cache: Dict[str, Dict] = {}
 
 def get_cached(ticker: str):
     entry = cache.get(ticker)
     if entry and (time.time() - entry["ts"] < CACHE_TTL):
-        return entry["price"]
+        return entry
     return None
 
-def set_cache(ticker: str, price: float):
-    cache[ticker] = {"price": price, "ts": time.time()}
+def set_cache(ticker: str, data: dict):
+    cache[ticker] = {**data, "ts": time.time()}
 
 # ────────────────────────────────────────────────────────────────────
-# yfinance fetch (history ➜ fast_info)
+# yfinance fetch with better daily change calculation
 # ────────────────────────────────────────────────────────────────────
 def fetch_price_yf(ticker: str) -> dict | None:
     ticker = ticker.strip().upper()
-    if cached := get_cached(ticker):
+    
+    # Check cache first
+    cached = get_cached(ticker)
+    if cached:
         return {
-            "price": cached,
-            "previous_close": None,
-            "daily_change_pct": None
+            "price": cached.get("price"),
+            "previous_close": cached.get("previous_close"),
+            "daily_change_pct": cached.get("daily_change_pct")
         }
 
     yf_symbol = f"{ticker}.NS"
     stock = yf.Ticker(yf_symbol)
 
-    # 1) history (most reliable)
     try:
-        hist = stock.history(period="2d")
-        if not hist.empty and len(hist) >= 2:
-            current_price = float(hist["Close"].iloc[-1])
-            previous_close = float(hist["Close"].iloc[-2])
-            daily_change_pct = ((current_price - previous_close) / previous_close) * 100
-
-            set_cache(ticker, current_price)
-            return {
-                "price": round(current_price, 2),
-                "previous_close": round(previous_close, 2),
-                "daily_change_pct": round(daily_change_pct, 2)
-            }
-    except Exception as e:
-        print(f"[YF] history() failed for {ticker}: {e}")
-
-    # 2) fast_info fallback
-    try:
-        info = stock.fast_info
-        current_price = info.get("last_price")
-        previous_close = info.get("previous_close")
-
-        if current_price:
-            set_cache(ticker, float(current_price))
-
+        # Get info for current price and previous close
+        info = stock.info
+        current_price = None
+        previous_close = None
+        
+        # Try multiple fields for current price
+        for field in ['currentPrice', 'regularMarketPrice', 'lastPrice', 'price']:
+            if field in info and info[field]:
+                current_price = float(info[field])
+                break
+        
+        # Try to get previous close
+        if 'previousClose' in info and info['previousClose']:
+            previous_close = float(info['previousClose'])
+        elif 'regularMarketPreviousClose' in info and info['regularMarketPreviousClose']:
+            previous_close = float(info['regularMarketPreviousClose'])
+        
+        # If we still don't have prices, try history
+        if not current_price or not previous_close:
+            hist = stock.history(period="5d")
+            if not hist.empty and len(hist) >= 2:
+                current_price = float(hist["Close"].iloc[-1])
+                previous_close = float(hist["Close"].iloc[-2])
+        
         if current_price and previous_close:
             daily_change_pct = ((current_price - previous_close) / previous_close) * 100
+            
+            # Cache the data
+            set_cache(ticker, {
+                "price": round(current_price, 2),
+                "previous_close": round(previous_close, 2),
+                "daily_change_pct": round(daily_change_pct, 2)
+            })
+            
             return {
                 "price": round(current_price, 2),
                 "previous_close": round(previous_close, 2),
                 "daily_change_pct": round(daily_change_pct, 2)
             }
-
+        
+        # If we only have current price
         if current_price:
+            set_cache(ticker, {
+                "price": round(current_price, 2),
+                "previous_close": None,
+                "daily_change_pct": None
+            })
+            
             return {
                 "price": round(current_price, 2),
                 "previous_close": None,
                 "daily_change_pct": None
             }
-
+            
     except Exception as e:
-        print(f"[YF] fast_info failed for {ticker}: {e}")
-
-    print(f"[YF] No price for {ticker}")
+        print(f"[YF] Error fetching data for {ticker}: {e}")
+    
+    print(f"[YF] No price data found for {ticker}")
     return None
 
 
@@ -263,7 +280,7 @@ def get_price(ticker: str):
 
     return StockPrice(
         ticker=ticker.upper(),
-        price=round(data["price"], 2),
+        price=data["price"],
         previous_close=data.get("previous_close"),
         daily_change_pct=data.get("daily_change_pct"),
     )
@@ -272,22 +289,32 @@ def get_price(ticker: str):
 def get_prices(tickers: List[str]):
     out: Dict[str, Dict] = {}
     for t in tickers:
-        price = fetch_price_yf(t)
-        if price is None:
+        data = fetch_price_yf(t)
+        if data is None:
             out[t.upper()] = {"success": False, "error": "price_not_found"}
         else:
-            out[t.upper()] = {"success": True, "price": round(price, 2), "currency": "INR"}
+            out[t.upper()] = {
+                "success": True, 
+                "price": data["price"], 
+                "previous_close": data.get("previous_close"),
+                "daily_change_pct": data.get("daily_change_pct"),
+                "currency": "INR"
+            }
     return out
 
 @app.get("/api/popular-stocks")
 def popular():
     result = []
     for sym, name in POPULAR.items():
-        price = fetch_price_yf(sym)
-        if price is not None:
-            result.append(
-                {"ticker": sym, "name": name, "price": round(price, 2), "currency": "INR"}
-            )
+        data = fetch_price_yf(sym)
+        if data is not None:
+            result.append({
+                "ticker": sym, 
+                "name": name, 
+                "price": data["price"], 
+                "daily_change_pct": data.get("daily_change_pct"),
+                "currency": "INR"
+            })
     return result
 
 @app.get("/api/health")

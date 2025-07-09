@@ -29,7 +29,7 @@ import { supabase } from "./supabaseClient";
 import { tickerList } from "./tickers";
 import Auth from "./auth";
 
-const API_BASE = process.env.REACT_APP_API_URL;
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
 const emptyForm = { ticker: "", shares: "", purchasePrice: "", purchaseDate: "" };
 
 // Color palette for pie chart
@@ -55,6 +55,7 @@ export default function App() {
   const [timeline, setTimeline] = useState("1y");
   const [selectedIds, setSelectedIds] = useState([]);
   const [chartType, setChartType] = useState("value"); // "value" or "profit"
+  const [refreshing, setRefreshing] = useState(false);
   const [theme, setTheme] = useState(
     localStorage.getItem("theme") || 
     (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
@@ -133,8 +134,10 @@ export default function App() {
   // Calculate today's profit/loss
   const todaysProfit = holdings.reduce((sum, h) => {
     const holdingValue = h.currentPrice * h.shares;
-    const dailyChange = (h.dailyChangePct || 0) / 100;
-    const todaysGain = holdingValue * dailyChange / (1 + dailyChange);
+    const dailyChangePct = h.dailyChangePct || 0;
+    // Calculate the previous day's value
+    const previousValue = holdingValue / (1 + dailyChangePct / 100);
+    const todaysGain = holdingValue - previousValue;
     return sum + todaysGain;
   }, 0);
   
@@ -434,14 +437,102 @@ export default function App() {
           <div className="header-left">
             <h1>OneGlance</h1>
             <p>Your investments, simplified</p>
+            {refreshing && (
+              <span style={{ fontSize: "0.75rem", color: "var(--text-sub)", marginLeft: "0.5rem" }}>
+                Updating prices...
+              </span>
+            )}
           </div>
-          <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-            {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
-          </button>
+          <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+            <button
+              onClick={async () => {
+                if (refreshing || holdings.length === 0) return;
+                setRefreshing(true);
+                
+                try {
+                  const updated = await Promise.all(
+                    holdings.map(async (h) => {
+                      try {
+                        const url = `${API_BASE}/api/price/${h.ticker}`;
+                        const res = await fetch(url);
+                        
+                        if (!res.ok) {
+                          console.error(`Refresh failed for ${h.ticker}: ${res.status}`);
+                          return h;
+                        }
+                        
+                        const data = await res.json();
+                        console.log(`Refreshed ${h.ticker}:`, data);
+                        
+                        const updatedHolding = {
+                          ...h,
+                          currentPrice: Number(data.price || h.currentPrice),
+                          dailyChangePct: Number(data.daily_change_pct || 0),
+                        };
+                        
+                        // Update in Supabase
+                        await supabase
+                          .from("holdings")
+                          .update({ current_price: updatedHolding.currentPrice })
+                          .eq("id", h.id);
+                        
+                        return updatedHolding;
+                      } catch (err) {
+                        console.error(`Error refreshing ${h.ticker}:`, err);
+                        return h;
+                      }
+                    })
+                  );
+                  
+                  setHoldings(updated);
+                  console.log("All holdings refreshed:", updated);
+                } catch (err) {
+                  console.error("Refresh error:", err);
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: refreshing ? "wait" : "pointer",
+                padding: "0.5rem",
+                borderRadius: "8px",
+                color: "var(--text-sub)",
+                transition: "all 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+              title="Refresh prices"
+              disabled={refreshing || holdings.length === 0}
+            >
+              <TrendingUp size={20} className={refreshing ? "spin" : ""} />
+            </button>
+            <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
+              {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="dashboard">
+        {/* Debug Info - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{ 
+            background: "var(--card-bg)", 
+            padding: "1rem", 
+            marginBottom: "1rem", 
+            borderRadius: "8px",
+            fontSize: "0.75rem",
+            color: "var(--text-sub)"
+          }}>
+            <p>API URL: {API_BASE || 'Not set'}</p>
+            <p>Holdings: {holdings.length} | Selected: {selectedIds.length}</p>
+            <p>Today's Profit: ₹{todaysProfit.toFixed(2)} ({todaysProfitPercent.toFixed(2)}%)</p>
+          </div>
+        )}
+        
         {/* Summary Cards */}
         <div className="summary-grid">
           <div className="summary-card">
