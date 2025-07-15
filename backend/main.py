@@ -219,6 +219,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from predict import router as predict_router
+app.include_router(predict_router)
+
 # ────────────────────────────────────────────────────────────────────
 # Pydantic model
 # ────────────────────────────────────────────────────────────────────

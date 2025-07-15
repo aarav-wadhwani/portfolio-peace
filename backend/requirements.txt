@@ -3,3 +3,9 @@ uvicorn
 yfinance
 python-dotenv
 requests
+pydantic
+pandas
+numpy
+xgboost
+joblib
+talib
