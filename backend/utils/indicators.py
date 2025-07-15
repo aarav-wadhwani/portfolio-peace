@@ -9,8 +9,9 @@ try:
 except ModuleNotFoundError:
     _USE_TALIB = False
 
-# ───── Short‑Term Core ─────
+# ───── Core Technical Indicators ─────
 def rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """Relative Strength Index"""
     if _USE_TALIB:
         return pd.Series(talib.RSI(close.values, timeperiod=period), index=close.index)
     delta = close.diff()
@@ -22,43 +23,49 @@ def rsi(close: pd.Series, period: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 def ema(close: pd.Series, period: int = 10) -> pd.Series:
+    """Exponential Moving Average"""
     if _USE_TALIB:
         return pd.Series(talib.EMA(close.values, timeperiod=period), index=close.index)
     return close.ewm(span=period, adjust=False).mean()
 
-def ema_long(close: pd.Series, period: int = 50) -> pd.Series:
-    return ema(close, period)   # uses same helper
-
-def sma_long(close: pd.Series, period: int) -> pd.Series:
+def sma(close: pd.Series, period: int) -> pd.Series:
+    """Simple Moving Average"""
     return close.rolling(window=period).mean()
 
-def lag_return(close: pd.Series, lag: int = 1) -> pd.Series:
-    return close.pct_change(lag).shift(lag)
-
-# ───── Momentum / Trend ─────
-def rolling_momentum(close: pd.Series, window: int = 10) -> pd.Series:
-    return close / close.shift(window) - 1
-
-def trend_strength(close: pd.Series, window: int = 30) -> pd.Series:
-    return (close - close.shift(window)) / close.shift(window)
-
-# ───── MACD, BB%, ATR, CCI, ROC, etc. (unchanged) ─────
-def macd_line(close: pd.Series) -> pd.Series:
+# ───── MACD Components ─────
+def macd_components(close: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Returns MACD line, signal line, and histogram"""
     if _USE_TALIB:
-        macd, _, _ = talib.MACD(close.values)
-        return pd.Series(macd, index=close.index)
+        macd, signal, hist = talib.MACD(close.values)
+        return (pd.Series(macd, index=close.index), 
+                pd.Series(signal, index=close.index),
+                pd.Series(hist, index=close.index))
     ema12 = close.ewm(span=12, adjust=False).mean()
     ema26 = close.ewm(span=26, adjust=False).mean()
-    return ema12 - ema26
+    macd_line = ema12 - ema26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
 
-def bollinger_percent_b(close: pd.Series, period: int = 20) -> pd.Series:
-    sma = close.rolling(window=period).mean()
+# ───── Bollinger Bands ─────
+def bollinger_bands(close: pd.Series, period: int = 20, std_dev: int = 2) -> dict:
+    """Returns upper band, middle band (SMA), lower band, and %B"""
+    middle = sma(close, period)
     std = close.rolling(window=period).std()
-    upper = sma + 2 * std
-    lower = sma - 2 * std
-    return (close - lower) / (upper - lower)
+    upper = middle + std_dev * std
+    lower = middle - std_dev * std
+    percent_b = (close - lower) / (upper - lower)
+    
+    return {
+        'upper': upper,
+        'middle': middle,
+        'lower': lower,
+        'percent_b': percent_b
+    }
 
+# ───── ATR (Average True Range) ─────
 def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Average True Range - volatility indicator"""
     if _USE_TALIB:
         return pd.Series(talib.ATR(high.values, low.values, close.values, timeperiod=period), index=close.index)
     tr1 = high - low
@@ -67,98 +74,282 @@ def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> 
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     return tr.rolling(period).mean()
 
+# ───── CCI (Commodity Channel Index) ─────
 def cci(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 20) -> pd.Series:
+    """Commodity Channel Index"""
     tp = (high + low + close) / 3
-    sma = tp.rolling(period).mean()
+    sma_tp = tp.rolling(period).mean()
     mad = tp.rolling(period).apply(lambda x: np.mean(np.abs(x - x.mean())))
-    return (tp - sma) / (0.015 * mad)
+    return (tp - sma_tp) / (0.015 * mad)
 
+# ───── ADX (Average Directional Index) ─────
 def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Average Directional Index - trend strength"""
     if _USE_TALIB:
         return pd.Series(talib.ADX(high.values, low.values, close.values, timeperiod=period), index=close.index)
-    # Simple pandas fallback (true range method)
-    plus_dm  = (high.diff()  > low.diff()).where(high.diff()  > 0, 0.0)
-    minus_dm = (low.diff().abs() > high.diff()).where(low.diff() < 0, 0.0)
-    tr = atr(high, low, close, 1).abs()
-    plus_di  = 100 * (plus_dm.rolling(period).sum() / tr.rolling(period).sum())
-    minus_di = 100 * (minus_dm.rolling(period).sum()  / tr.rolling(period).sum())
-    dx = (abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], np.nan)
-    return dx.rolling(period).mean()
+    
+    # Calculate directional movement
+    high_diff = high.diff()
+    low_diff = -low.diff()
+    
+    plus_dm = np.where((high_diff > low_diff) & (high_diff > 0), high_diff, 0)
+    minus_dm = np.where((low_diff > high_diff) & (low_diff > 0), low_diff, 0)
+    
+    # True range
+    tr = atr(high, low, close, 1)
+    
+    # Smoothed directional indicators
+    plus_di = 100 * pd.Series(plus_dm).rolling(period).sum() / tr.rolling(period).sum()
+    minus_di = 100 * pd.Series(minus_dm).rolling(period).sum() / tr.rolling(period).sum()
+    
+    # ADX calculation
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di)
+    adx = dx.rolling(period).mean()
+    
+    return adx.fillna(0)
 
-def rate_of_change(close: pd.Series, period: int = 5) -> pd.Series:
-    return close.pct_change(period)
+# ───── Rate of Change ─────
+def rate_of_change(close: pd.Series, period: int = 10) -> pd.Series:
+    """Rate of Change - momentum indicator"""
+    return ((close - close.shift(period)) / close.shift(period)) * 100
 
-def force_index(close: pd.Series, volume: pd.Series) -> pd.Series:
-    return (close.diff() * volume).fillna(0)
+# ───── Force Index ─────
+def force_index(close: pd.Series, volume: pd.Series, period: int = 13) -> pd.Series:
+    """Force Index - combines price and volume"""
+    fi = close.diff() * volume
+    return fi.ewm(span=period, adjust=False).mean()
 
-def open_close_diff(open_: pd.Series, close: pd.Series) -> pd.Series:
-    return close - open_
-
-def high_low_range(high: pd.Series, low: pd.Series) -> pd.Series:
-    return high - low
-
+# ───── Volatility Measures ─────
 def rolling_volatility(close: pd.Series, period: int = 20) -> pd.Series:
-    return close.pct_change().rolling(window=period).std()
+    """Rolling standard deviation of returns"""
+    returns = close.pct_change()
+    return returns.rolling(window=period).std() * np.sqrt(252)  # Annualized
 
-# ───── Feature Column Builder ─────
+# ───── NEW: Advanced Features ─────
+def price_to_ma_ratios(close: pd.Series, sma_50: pd.Series, sma_200: pd.Series, ema_50: pd.Series) -> dict:
+    """Price relative to moving averages"""
+    return {
+        'price_to_sma50_ratio': close / sma_50,
+        'price_to_sma200_ratio': close / sma_200,
+        'price_to_ema50_ratio': close / ema_50,
+    }
+
+def moving_average_signals(sma_50: pd.Series, sma_200: pd.Series, ema_12: pd.Series, ema_26: pd.Series) -> dict:
+    """Trading signals from moving averages"""
+    return {
+        'golden_cross': (sma_50 > sma_200).astype(int),
+        'death_cross': (sma_50 < sma_200).astype(int),
+        'ema_bullish': (ema_12 > ema_26).astype(int),
+    }
+
+def momentum_features(close: pd.Series, rsi_val: pd.Series, macd_hist: pd.Series) -> dict:
+    """Advanced momentum features"""
+    price_change_20 = close.pct_change(20)
+    
+    return {
+        'momentum_10d': (close / close.shift(10) - 1) * 100,
+        'momentum_30d': (close / close.shift(30) - 1) * 100,
+        'rsi_oversold': (rsi_val < 30).astype(int),
+        'rsi_overbought': (rsi_val > 70).astype(int),
+        'price_rsi_divergence': ((price_change_20 > 0) & (rsi_val < 50)).astype(int),
+        'macd_bullish': (macd_hist > 0).astype(int),
+    }
+
+def volatility_regime(volatility_20: pd.Series, volatility_60: pd.Series) -> pd.Series:
+    """Classify volatility regime"""
+    vol_ratio = volatility_20 / volatility_60
+    conditions = [
+        vol_ratio < 0.8,
+        (vol_ratio >= 0.8) & (vol_ratio <= 1.2),
+        vol_ratio > 1.2
+    ]
+    choices = [0, 1, 2]  # Low, Normal, High volatility regime
+    return pd.Series(np.select(conditions, choices), index=volatility_20.index)
+
+def trend_strength_features(close: pd.Series, adx_val: pd.Series) -> dict:
+    """Trend strength indicators"""
+    returns_5d = close.pct_change(5)
+    returns_20d = close.pct_change(20)
+    
+    return {
+        'trend_strength_5d': returns_5d.abs(),
+        'trend_strength_20d': returns_20d.abs(),
+        'strong_trend': (adx_val > 25).astype(int),
+        'trend_consistency': (returns_5d * returns_20d > 0).astype(int),
+    }
+
+# ───── Feature Column Names ─────
 def build_feature_columns(index_aliases: list[str] = []) -> list[str]:
-    base = [
-    "EMA", "SMA_10", "SMA_20", "BB%", "CCI", "ROC", "Volatility", "Momentum10",
-    "EMA50", "SMA_50", "SMA_200", "Trend30", "Momentum30", "Volatility60", "ADX14", "LagReturn_5", "LagReturn_10"
-]
+    """Build list of all feature column names"""
+    base_features = [
+        # Moving averages
+        'sma_50', 'sma_200', 'ema_50',
+        
+        # Price ratios
+        'price_to_sma50_ratio', 'price_to_sma200_ratio', 'price_to_ema50_ratio',
+        
+        # Technical indicators
+        'rsi', 'macd_line', 'macd_histogram', 'bb_percent_b',
+        'cci', 'roc', 'atr', 'adx', 'force_index',
+        
+        # Volatility
+        'volatility_20', 'volatility_60', 'volatility_regime',
+        
+        # Signals
+        'golden_cross', 'death_cross', 'ema_bullish', 'macd_bullish',
+        
+        # Momentum
+        'momentum_10d', 'momentum_30d',
+        'rsi_oversold', 'rsi_overbought', 'price_rsi_divergence',
+        
+        # Trend
+        'trend_strength_5d', 'trend_strength_20d',
+        'strong_trend', 'trend_consistency',
+        
+        # Calendar
+        'day_of_week', 'month',
+    ]
+    
+    # Add index features
+    index_features = []
+    for idx in index_aliases:
+        index_features.extend([
+            f'{idx}_1d_return',
+            f'{idx}_5d_return',
+        ])
+    
+    # Add interaction features
+    if 'NIFTYBANK' in index_aliases and 'NIFTYIT' in index_aliases:
+        index_features.append('bank_it_divergence')
+    
+    return base_features + index_features
 
-    idx_feats = [f"{name}_{p}d_return" for name in index_aliases for p in (1, 5)]
-    return base + idx_feats
-
-# ───── Main Feature Generator ─────
+# ───── Main Feature Engineering Function ─────
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    # Short‑term set
-    #df["RSI"]       = rsi(df["Close"])
-    df["EMA"]       = ema(df["Close"])
-    #df["LagReturn"] = lag_return(df["Close"])
-    #df["MACD"]      = macd_line(df["Close"])
-    df["SMA_10"]    = df["Close"].rolling(10).mean()
-    df["SMA_20"]    = df["Close"].rolling(20).mean()
-    df["BB%"]       = bollinger_percent_b(df["Close"])
-    #df["ATR"]       = atr(df["High"], df["Low"], df["Close"])
-    df["CCI"]       = cci(df["High"], df["Low"], df["Close"])
-    df["ROC"]       = rate_of_change(df["Close"])
-    # df["ForceIdx"]  = force_index(df["Close"], df["Volume"])
-    # df["OC_Diff"]   = open_close_diff(df["Open"], df["Close"])
-    # df["HL_Range"]  = high_low_range(df["High"], df["Low"])
-    df["Volatility"]= rolling_volatility(df["Close"])
-    df["Momentum10"]= rolling_momentum(df["Close"], 10)
+    """Add all technical indicators and features to dataframe"""
+    df = df.copy()
+    
+    # Basic moving averages
+    df['sma_50'] = sma(df['Close'], 50)
+    df['sma_200'] = sma(df['Close'], 200)
+    df['ema_12'] = ema(df['Close'], 12)
+    df['ema_26'] = ema(df['Close'], 26)
+    df['ema_50'] = ema(df['Close'], 50)
+    
+    # Price ratios
+    ratios = price_to_ma_ratios(df['Close'], df['sma_50'], df['sma_200'], df['ema_50'])
+    for key, value in ratios.items():
+        df[key] = value
+    
+    # RSI
+    df['rsi'] = rsi(df['Close'])
+    
+    # MACD
+    macd_line, macd_signal, macd_hist = macd_components(df['Close'])
+    df['macd_line'] = macd_line
+    df['macd_signal'] = macd_signal
+    df['macd_histogram'] = macd_hist
+    
+    # Bollinger Bands
+    bb = bollinger_bands(df['Close'])
+    df['bb_upper'] = bb['upper']
+    df['bb_lower'] = bb['lower']
+    df['bb_percent_b'] = bb['percent_b']
+    
+    # Other indicators
+    df['cci'] = cci(df['High'], df['Low'], df['Close'])
+    df['roc'] = rate_of_change(df['Close'])
+    df['atr'] = atr(df['High'], df['Low'], df['Close'])
+    df['adx'] = adx(df['High'], df['Low'], df['Close'])
+    
+    # Volume-based
+    if 'Volume' in df.columns:
+        df['force_index'] = force_index(df['Close'], df['Volume'])
+    else:
+        df['force_index'] = 0
+    
+    # Volatility
+    df['volatility_20'] = rolling_volatility(df['Close'], 20)
+    df['volatility_60'] = rolling_volatility(df['Close'], 60)
+    df['volatility_regime'] = volatility_regime(df['volatility_20'], df['volatility_60'])
+    
+    # Moving average signals
+    ma_signals = moving_average_signals(df['sma_50'], df['sma_200'], df['ema_12'], df['ema_26'])
+    for key, value in ma_signals.items():
+        df[key] = value
+    
+    # Momentum features
+    momentum_feat = momentum_features(df['Close'], df['rsi'], df['macd_histogram'])
+    for key, value in momentum_feat.items():
+        df[key] = value
+    
+    # Trend features
+    trend_feat = trend_strength_features(df['Close'], df['adx'])
+    for key, value in trend_feat.items():
+        df[key] = value
+    
+    # Calendar features
+    if 'Date' in df.columns:
+        df['day_of_week'] = pd.to_datetime(df['Date']).dt.dayofweek
+        df['month'] = pd.to_datetime(df['Date']).dt.month
+    
+    # Drop intermediate columns not needed for modeling
+    cols_to_drop = ['ema_12', 'ema_26', 'macd_signal', 'bb_upper', 'bb_lower']
+    df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
+    
+    return df.replace([np.inf, -np.inf], np.nan).dropna()
 
-    # Long‑term layer
-    df["EMA50"]     = ema_long(df["Close"], 50)
-    df["SMA_50"]    = sma_long(df["Close"], 50)
-    df["SMA_200"]   = sma_long(df["Close"], 200)
-    df["Trend30"]   = trend_strength(df["Close"], 30)
-    df["Momentum30"]= rolling_momentum(df["Close"], 30)
-    df["Volatility60"] = rolling_volatility(df["Close"], 60)
-    df["ADX14"]     = adx(df["High"], df["Low"], df["Close"])
-    df["LagReturn_5"] = df["Close"].pct_change(5).shift(1)
-    df["LagReturn_10"] = df["Close"].pct_change(10).shift(1)
-
-
-    return df.dropna()
-
-# ───── Add Sectoral/Broad Indices (unchanged) ─────
+# ───── Add Index Features for Sectoral Analysis ─────
 def add_index_features(df: pd.DataFrame, index_paths: dict[str, str]) -> pd.DataFrame:
+    """Add sectoral index features for market breadth analysis"""
+    df = df.copy()
+    
     for name, path in index_paths.items():
-        idx = pd.read_csv(path)
-        for col in ("Index Name", "Index", "Name"):
-            if col in idx.columns:
-                idx.drop(columns=col, inplace=True)
-        idx["Date"] = pd.to_datetime(idx["Date"], format="%d %b %Y")
-        idx["Close"] = (
-            idx["Close"].astype(str).str.replace(",", "", regex=False).str.strip().astype(float)
-        )
-        idx.sort_values("Date", inplace=True)
-        idx[f"{name}_1d_return"] = idx["Close"].pct_change(1)
-        idx[f"{name}_5d_return"] = idx["Close"].pct_change(5)
-        df = df.merge(
-            idx[["Date", f"{name}_1d_return", f"{name}_5d_return"]],
-            on="Date", how="left"
-        )
+        try:
+            # Read index data
+            idx = pd.read_csv(path)
+            
+            # Clean column names
+            for col in ("Index Name", "Index", "Name"):
+                if col in idx.columns:
+                    idx.drop(columns=col, inplace=True)
+            
+            # Process date
+            idx["Date"] = pd.to_datetime(idx["Date"], format="%d %b %Y")
+            
+            # Clean close price
+            idx["Close"] = (
+                idx["Close"]
+                .astype(str)
+                .str.replace(",", "", regex=False)
+                .str.strip()
+                .astype(float)
+            )
+            
+            # Sort by date
+            idx.sort_values("Date", inplace=True)
+            
+            # Calculate returns
+            idx[f"{name}_1d_return"] = idx["Close"].pct_change(1)
+            idx[f"{name}_5d_return"] = idx["Close"].pct_change(5)
+            
+            # Merge with main dataframe
+            df = df.merge(
+                idx[["Date", f"{name}_1d_return", f"{name}_5d_return"]],
+                on="Date",
+                how="left"
+            )
+            
+        except Exception as e:
+            print(f"Warning: Could not process index {name}: {e}")
+            df[f"{name}_1d_return"] = np.nan
+            df[f"{name}_5d_return"] = np.nan
+    
+    # Add interaction features
+    if 'NIFTYBANK_5d_return' in df.columns and 'NIFTYIT_5d_return' in df.columns:
+        df['bank_it_divergence'] = df['NIFTYBANK_5d_return'] - df['NIFTYIT_5d_return']
+    
     return df
+
+# Export key feature list for backward compatibility
+FEATURE_COLUMNS = build_feature_columns()
