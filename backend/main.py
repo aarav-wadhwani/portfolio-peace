@@ -1,4 +1,5 @@
 # main.py ─────────────────────────────────────────────────────────────
+import sys
 import os
 import time
 from datetime import datetime
@@ -219,6 +220,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+sys.path.append(os.path.dirname(__file__))
 from predict import router as predict_router
 app.include_router(predict_router)
 
