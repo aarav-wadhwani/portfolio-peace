@@ -119,6 +119,12 @@ export default function App() {
     return data.price;
   }
 
+  async function fetchPrediction(ticker) {
+    const res = await fetch(`${API_BASE}/api/predict/${ticker}`);
+    if (!res.ok) throw new Error("Prediction failed for " + ticker);
+    return await res.json();
+  }
+
   // ─── Portfolio Calculations ─────────────────────────────────────
   const totalInvested = holdings.reduce(
     (sum, h) => sum + h.purchasePrice * h.shares,
@@ -455,27 +461,26 @@ export default function App() {
                       try {
                         const url = `${API_BASE}/api/price/${h.ticker}`;
                         const res = await fetch(url);
-                        
-                        if (!res.ok) {
-                          console.error(`Refresh failed for ${h.ticker}: ${res.status}`);
-                          return h;
-                        }
-                        
                         const data = await res.json();
-                        console.log(`Refreshed ${h.ticker}:`, data);
-                        
+
+                        const prediction = await fetchPrediction(h.ticker);
+
                         const updatedHolding = {
                           ...h,
                           currentPrice: Number(data.price || h.currentPrice),
                           dailyChangePct: Number(data.daily_change_pct || 0),
+                          prediction: prediction.prediction,
+                          confidence: prediction.confidence,
+                          expectedReturn: prediction.expected_return,
+                          recommendation: prediction.recommendation,
+                          riskLevel: prediction.risk_level,
                         };
-                        
-                        // Update in Supabase
+
                         await supabase
                           .from("holdings")
                           .update({ current_price: updatedHolding.currentPrice })
                           .eq("id", h.id);
-                        
+
                         return updatedHolding;
                       } catch (err) {
                         console.error(`Error refreshing ${h.ticker}:`, err);
@@ -706,6 +711,9 @@ export default function App() {
                       <th onClick={() => handleSort("shares")} style={{ textAlign: "center" }}>
                         Shares {sortBy === "shares" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
                       </th>
+                      <th style={{ textAlign: "center" }}>
+                        Prediction
+                      </th>
                       <th onClick={() => handleSort("profit")} style={{ textAlign: "right" }}>
                         Profit/Loss {sortBy === "profit" && <span style={{ fontSize: "0.7rem", marginLeft: "4px" }}>{sortOrder === "asc" ? "↑" : "↓"}</span>}
                       </th>
@@ -761,6 +769,23 @@ export default function App() {
                             </div>
                           </td>
                           <td className="shares-cell">{h.shares}</td>
+                          <td className="prediction-cell">
+                            {h.prediction ? (
+                              <div className="prediction-tooltip-wrapper">
+                                <span className={`prediction-badge ${h.prediction.toLowerCase()}`}>
+                                  {h.prediction.charAt(0) + h.prediction.slice(1).toLowerCase()}
+                                </span>
+                                <div className="prediction-tooltip">
+                                  <p><strong>Confidence:</strong> {(h.confidence * 100).toFixed(1)}%</p>
+                                  <p><strong>Expected Return:</strong> {h.expectedReturn?.toFixed(2)}%</p>
+                                  <p><strong>Recommendation:</strong> {h.recommendation}</p>
+                                  <p><strong>Risk:</strong> {h.riskLevel}</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="prediction-badge neutral">—</span>
+                            )}
+                          </td>
                           <td className={`profit-cell ${profit >= 0 ? "positive" : "negative"}`}>
                             {profit >= 0 ? "+" : ""}₹{Math.abs(profit).toFixed(0)}
                             <span className="arrow">
