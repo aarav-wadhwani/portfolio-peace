@@ -1006,3 +1006,59 @@ body {
   color: var(--text-sub);
   border: 1px solid var(--border);
 }
+
+.prediction-cell {
+  text-align: center;
+}
+
+.prediction-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  text-transform: capitalize;
+  color: white;
+}
+
+.prediction-badge.bullish {
+  background-color: var(--positive);
+}
+
+.prediction-badge.bearish {
+  background-color: var(--negative);
+}
+
+.prediction-badge.neutral {
+  background-color: #999;
+  color: white;
+}
+
+.prediction-tooltip-wrapper {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.prediction-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--card-bg);
+  color: var(--text-main);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  z-index: 10;
+  min-width: 180px;
+  text-align: left;
+}
+
+.prediction-tooltip-wrapper:hover .prediction-tooltip {
+  display: block;
+}
