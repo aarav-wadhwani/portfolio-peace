@@ -24,7 +24,9 @@ warnings.filterwarnings('ignore')
 # ------------------------------------------------------------------
 # Load models and metadata
 # ------------------------------------------------------------------
-MODEL_DIR = Path("model")
+import os
+MODEL_DIR = Path(__file__).resolve().parent / "model"
+
 
 try:
     # Load classifier (ensemble or single model)
