@@ -9,4 +9,3 @@ numpy
 xgboost
 joblib
 scikit-learn
-talib

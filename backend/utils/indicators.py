@@ -9,6 +9,8 @@ try:
 except ModuleNotFoundError:
     _USE_TALIB = False
 
+_USE_TALIB = False
+
 # ───── Core Technical Indicators ─────
 def rsi(close: pd.Series, period: int = 14) -> pd.Series:
     """Relative Strength Index"""
@@ -509,8 +511,15 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     # Drop intermediate columns not needed for modeling
     cols_to_drop = ['ema_12', 'ema_26', 'macd_signal', 'bb_upper', 'bb_lower']
     df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
-    
-    return df.replace([np.inf, -np.inf], np.nan).dropna()
+
+    # Replace infinities with NaN
+    df = df.replace([np.inf, -np.inf], np.nan)
+
+    # Only drop rows where all values are NaN, so we keep any row with at least one valid feature
+    df = df.dropna(how='all')
+
+    return df
+
 
 # ───── Fixed Add Index Features Function ─────
 def add_index_features(df: pd.DataFrame, index_paths: dict[str, str]) -> pd.DataFrame:
