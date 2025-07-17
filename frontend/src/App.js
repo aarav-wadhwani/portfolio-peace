@@ -103,6 +103,12 @@ export default function App() {
             purchasePrice: Number(d.purchase_price),
             currentPrice: Number(d.current_price),
             purchaseDate: d.purchase_date,
+            dailyChangePct: Number(d.daily_change_pct ?? 0),
+            prediction: d.prediction,
+            confidence: d.confidence,
+            expectedReturn: d.expected_return,
+            recommendation: d.recommendation,
+            riskLevel: d.risk_level,
           }))
         );
       }
@@ -119,11 +125,89 @@ export default function App() {
     return data.price;
   }
 
+  async function getCachedPrediction(ticker) {
+    const { data, error } = await supabase
+      .from("prediction_cache")
+      .select("*")
+      .eq("ticker", ticker)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const isFresh = new Date(data.updated_at) > new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return isFresh ? data : null;
+  }
+
   async function fetchPrediction(ticker) {
     const res = await fetch(`${API_BASE}/api/predict/${ticker}`);
     if (!res.ok) throw new Error("Prediction failed for " + ticker);
     return await res.json();
   }
+
+  async function updatePredictionCache(ticker, prediction) {
+    await supabase
+      .from("prediction_cache")
+      .upsert({
+        ticker,
+        updated_at: new Date().toISOString(),
+        prediction: prediction.prediction,
+        confidence: prediction.confidence,
+        expected_return: prediction.expected_return,
+        recommendation: prediction.recommendation,
+        risk_level: prediction.risk_level,
+        daily_change_pct: prediction.daily_change_pct ?? null
+      });
+  }
+
+  async function refreshAllHoldings(holdings, userId) {
+    const updated = await Promise.all(
+      holdings.map(async (h) => {
+        try {
+          const res = await fetch(`${API_BASE}/api/price/${h.ticker}`);
+          const data = await res.json();
+
+          let prediction = await getCachedPrediction(h.ticker);
+
+          if (!prediction) {
+            prediction = await fetchPrediction(h.ticker);
+            await updatePredictionCache(h.ticker, prediction);
+          }
+
+          const updatedHolding = {
+            ...h,
+            currentPrice: Number(data.price || h.currentPrice),
+            dailyChangePct: Number(data.daily_change_pct || 0),
+            prediction: prediction.prediction,
+            confidence: prediction.confidence,
+            expectedReturn: prediction.expected_return,
+            recommendation: prediction.recommendation,
+            riskLevel: prediction.risk_level,
+          };
+
+          await supabase
+            .from("holdings")
+            .update({
+              current_price: updatedHolding.currentPrice,
+              daily_change_pct: updatedHolding.dailyChangePct,
+              prediction: updatedHolding.prediction,
+              confidence: updatedHolding.confidence,
+              expected_return: updatedHolding.expectedReturn,
+              recommendation: updatedHolding.recommendation,
+              risk_level: updatedHolding.riskLevel,
+            })
+            .eq("id", h.id);
+
+          return updatedHolding;
+        } catch (err) {
+          console.error(`Error refreshing ${h.ticker}:`, err);
+          return h;
+        }
+      })
+    );
+
+    return updated;
+  }
+
 
   // ─── Portfolio Calculations ─────────────────────────────────────
   const totalInvested = holdings.reduce(
@@ -454,41 +538,9 @@ export default function App() {
               onClick={async () => {
                 if (refreshing || holdings.length === 0) return;
                 setRefreshing(true);
-                
+
                 try {
-                  const updated = await Promise.all(
-                    holdings.map(async (h) => {
-                      try {
-                        const url = `${API_BASE}/api/price/${h.ticker}`;
-                        const res = await fetch(url);
-                        const data = await res.json();
-
-                        const prediction = await fetchPrediction(h.ticker);
-
-                        const updatedHolding = {
-                          ...h,
-                          currentPrice: Number(data.price || h.currentPrice),
-                          dailyChangePct: Number(data.daily_change_pct || 0),
-                          prediction: prediction.prediction,
-                          confidence: prediction.confidence,
-                          expectedReturn: prediction.expected_return,
-                          recommendation: prediction.recommendation,
-                          riskLevel: prediction.risk_level,
-                        };
-
-                        await supabase
-                          .from("holdings")
-                          .update({ current_price: updatedHolding.currentPrice })
-                          .eq("id", h.id);
-
-                        return updatedHolding;
-                      } catch (err) {
-                        console.error(`Error refreshing ${h.ticker}:`, err);
-                        return h;
-                      }
-                    })
-                  );
-                  
+                  const updated = await refreshAllHoldings(holdings, user.id);
                   setHoldings(updated);
                   console.log("All holdings refreshed:", updated);
                 } catch (err) {
