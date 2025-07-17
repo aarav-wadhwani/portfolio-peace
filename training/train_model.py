@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -40,13 +42,12 @@ from sklearn.preprocessing import RobustScaler
 from sklearn.utils.class_weight import compute_class_weight
 from imblearn.over_sampling import SMOTE
 import xgboost as xgb
-from models import ForcedBalancedClassifier
-
+from backend.models import ForcedBalancedClassifier
 
 warnings.filterwarnings('ignore')
 
 # ── Add backend to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from backend.utils.indicators import (
     add_features,
     add_index_features,
